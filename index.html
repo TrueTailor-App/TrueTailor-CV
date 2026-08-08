@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.18</span>
+        <span class="tt-ver" id="verBadge">v38.19</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2109,7 +2109,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.18';
+var TT_VERSION = 'v38.19';
 
 var APP = {
   apiKey: '',
@@ -6380,6 +6380,10 @@ var REQ_KINDS = { hard_skill: 1, tool: 1, soft_skill: 1, responsibility: 1, doma
 function ttRecordSignalsModel() {
   if (!APP.runModels) APP.runModels = {};
   APP.runModels.signals = TT_LAST_MODEL;
+  /* What the cascade would have chosen if nothing were rate limited. Kept so
+     that the panel can tell the difference between "measured by the usual
+     model" and "measured by whatever was still answering". */
+  try { APP.runModels.preferred = (getModelCascade() || [])[0] || ''; } catch (e) {}
 }
 
 function normalizeSignals(obj) {
@@ -7380,14 +7384,48 @@ var TT_DISTANCE = {
 ttLiveFields(TT_DISTANCE, ['he']);
 
 async function stepCoverage() {
-  var raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
+  /* ---------- ONE INSTRUMENT FOR ONE MEASUREMENT ----------
+     Stage 1 decides what the posting asks for and stage 2 decides what the
+     resume proves. They are two halves of one reading, and until now each one
+     took whichever model was answering at that second. A cascade that dropped
+     between them produced a measurement taken with two different instruments,
+     reported as one number, with nothing on screen to say so.
+
+     Now stage 2 is pinned to the model that answered stage 1. If that model is
+     out of quota the run does not die: it falls back to the full cascade, and
+     the fact that the two halves disagree about who read them is recorded and
+     said out loud. Falling back is right for writing, where a different model
+     produces a different sentence and the reader can judge it. It is not free
+     for measuring, where a different model produces a different number and the
+     reader has no way to tell.
+
+     This came out of three runs of one unchanged pairing: 73, 73, 54 and then
+     53, 53, 41. Two identical results and then a drop, twice, always on the
+     third. Sampling noise does not do that. A per project quota answering 429
+     to a third run inside a few minutes does. */
+  var pinned = (APP.runModels && APP.runModels.signals) ? [APP.runModels.signals] : null;
+  var raw;
+  try {
+    raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
+      models: pinned,
     /* Same reason as stage 1, and this is the one that moves the score: the run
        that came back 54 had proved 5 of 11 must haves where the two that came
        back 73 had proved eight or nine of the same eleven. The requirement list
        held; three rows were simply read differently. */
     json: true, temperature: 0, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
-    failOnTruncation: true
-  });
+      failOnTruncation: true
+    });
+  } catch (e) {
+    if (!pinned) throw e;
+    /* The model that read the posting cannot read the resume. Better a
+       measurement taken with two instruments and labelled as such than no
+       measurement at all, so long as it is labelled. */
+    if (APP.runModels) APP.runModels.fellBack = true;
+    raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
+      json: true, temperature: 0, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
+      failOnTruncation: true
+    });
+  }
   /* ---------- WHO MEASURED ----------
        The cascade drops to the next model on a 429, and a free tier answers 429
        to a third run inside a few minutes. So the same document can be read by
@@ -8833,6 +8871,24 @@ function ttMeasuredBy() {
   return '<span style="opacity:.75">' + escapeHtml(H('נמדד על ידי ') + names.join(' · ')) + '</span>';
 }
 
+/* The one case where the model is not a footnote. A score produced by a backup
+   model is not comparable with one produced by the usual model, and comparing
+   them is exactly what a person does when they run the same pairing twice. */
+function ttMeasurementWarning() {
+  var m = APP.runModels;
+  if (!m || !m.coverage) return '';
+  var mixed = m.signals && m.coverage && m.signals !== m.coverage;
+  var backup = m.preferred && m.coverage !== m.preferred;
+  if (!mixed && !backup) return '';
+  var line = mixed
+    ? H('שני חלקי המדידה נקראו על ידי מודלים שונים, כי המכסה של הראשון נגמרה באמצע.')
+    : H('המדידה נעשתה על ידי מודל גיבוי, כי המכסה של המודל הראשי נגמרה.');
+  return '<div class="tt-vd-more"><b>' + escapeHtml(H('שים לב למספר הזה')) + '</b> ' +
+    escapeHtml(line + ' ' +
+      H('הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל. המתן דקה והרץ שוב כדי לקבל מדידה להשוואה.')) +
+    '</div>';
+}
+
 /* What is missing, said with its own name. The three blocks answer three
    different questions and are kept apart on purpose: a requirement that is not
    proved, a number that is an order of magnitude short, and a fact the document
@@ -8947,6 +9003,7 @@ function renderMatchVerdict() {
   var score = '<div class="tt-vd-score"><b>' + v.score + '</b><span>/100</span></div>';
   el.innerHTML = ttVerdictShell(v.level,
     ttVerdictHead(v, H('רמת ההתאמה, לפני שאלות ההתאמה'), ttNarrativeFor('before', v), score) +
+    ttMeasurementWarning() +
     ttVerdictDetail(v) +
     ttVerdictAdvice(v));
 }
@@ -17323,6 +17380,10 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'שים לב למספר הזה':['انتبه إلى هذا الرقم','Treat this number with care','Attention à ce chiffre','Cuidado con este número','Vorsicht bei dieser Zahl','Attenzione a questo numero','Atenção a este número','Oprez s ovim brojem','Осторожно с этим числом','この数値にはご注意ください','इस अंक को सावधानी से देखें'],
+'המדידה נעשתה על ידי מודל גיבוי, כי המכסה של המודל הראשי נגמרה.':['أُجري القياس بنموذج احتياطي، لأن حصة النموذج الأساسي نفدت.','The measurement was made by a backup model, because the main model was out of quota.','La mesure a été faite par un modèle de secours, le quota du modèle principal étant épuisé.','La medición la hizo un modelo de respaldo, porque el modelo principal se quedó sin cuota.','Die Messung stammt von einem Ersatzmodell, weil das Hauptmodell sein Kontingent aufgebraucht hatte.','La misurazione è stata fatta da un modello di riserva, perché il modello principale ha esaurito la quota.','A medição foi feita por um modelo reserva, porque o modelo principal ficou sem cota.','Mjerenje je obavio pričuvni model jer je glavnom modelu ponestalo kvote.','Измерение выполнила резервная модель, так как у основной закончилась квота.','主モデルの利用枠が尽きたため、予備モデルが測定しました。','मुख्य मॉडल की सीमा समाप्त होने के कारण माप बैकअप मॉडल ने किया।'],
+'שני חלקי המדידה נקראו על ידי מודלים שונים, כי המכסה של הראשון נגמרה באמצע.':['قرأ جزأي القياس نموذجان مختلفان، لأن حصة الأول نفدت في الأثناء.','The two halves of the measurement were read by different models, because the first ran out of quota midway.','Les deux moitiés de la mesure ont été lues par des modèles différents, le premier ayant épuisé son quota en cours de route.','Las dos mitades de la medición las leyeron modelos distintos, porque al primero se le agotó la cuota a mitad.','Die beiden Hälften der Messung wurden von verschiedenen Modellen gelesen, weil dem ersten mittendrin das Kontingent ausging.','Le due metà della misurazione sono state lette da modelli diversi, perché al primo è finita la quota a metà strada.','As duas metades da medição foram lidas por modelos diferentes, porque o primeiro ficou sem cota no meio.','Dvije polovice mjerenja pročitala su različita modela, jer je prvome usred posla ponestalo kvote.','Две половины измерения прочитали разные модели: у первой посреди работы закончилась квота.','測定の前半と後半を別々のモデルが読みました。前半のモデルの利用枠が途中で尽きたためです。','माप के दोनों हिस्से अलग-अलग मॉडलों ने पढ़े, क्योंकि पहले की सीमा बीच में समाप्त हो गई।'],
+'הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל. המתן דקה והרץ שוב כדי לקבל מדידה להשוואה.':['قد يختلف الرقم عن تشغيل جرى على النموذج المعتاد. انتظر دقيقة وأعد التشغيل للحصول على قياس قابل للمقارنة.','The score may differ from a run made on the usual model. Wait a minute and run again for a comparable measurement.','Le score peut différer d’une exécution faite sur le modèle habituel. Attendez une minute et relancez pour une mesure comparable.','La puntuación puede diferir de una ejecución hecha con el modelo habitual. Espera un minuto y vuelve a ejecutar para obtener una medición comparable.','Der Wert kann von einem Lauf mit dem üblichen Modell abweichen. Warten Sie eine Minute und starten Sie erneut, um eine vergleichbare Messung zu erhalten.','Il punteggio può differire da un’esecuzione fatta con il modello abituale. Attendi un minuto ed esegui di nuovo per una misurazione confrontabile.','A pontuação pode diferir de uma execução feita no modelo habitual. Espere um minuto e execute de novo para uma medição comparável.','Rezultat se može razlikovati od pokretanja na uobičajenom modelu. Pričekajte minutu i pokrenite ponovno za usporedivo mjerenje.','Оценка может отличаться от запуска на обычной модели. Подождите минуту и запустите снова, чтобы получить сопоставимое измерение.','通常のモデルで実行した場合とスコアが異なることがあります。1 分ほど待ってから再実行すると比較可能な測定が得られます。','सामान्य मॉडल पर किए गए रन से अंक भिन्न हो सकता है। एक मिनट रुककर दोबारा चलाएँ ताकि तुलना योग्य माप मिले।'],
 'נמדד על ידי ':['قِيس بواسطة ','measured by ','mesuré par ','medido por ','gemessen von ','misurato da ','medido por ','izmjerio ','измерено моделью ','測定モデル：','मापन किया '],
 'קורות חיים שמורים: שמור פעם אחת, ובמשרה הבאה לא תצטרך להדביק או להעלות שוב.':['سير ذاتية محفوظة: احفظها مرة واحدة، وفي الوظيفة التالية لن تحتاج إلى لصقها أو رفعها من جديد.','Saved resumes: save once, and on the next job you will not have to paste or upload it again.','CV enregistrés : enregistrez une fois, et au poste suivant vous n\u2019aurez plus à le coller ni à le téléverser.','Currículums guardados: guarda una vez y en el próximo empleo no tendrás que pegarlo ni subirlo otra vez.','Gespeicherte Lebensläufe: einmal speichern, und bei der nächsten Stelle müssen Sie ihn nicht erneut einfügen oder hochladen.','CV salvati: salva una volta e alla prossima offerta non dovrai incollarlo o caricarlo di nuovo.','Currículos salvos: salve uma vez e na próxima vaga você não precisará colar nem enviar de novo.','Spremljeni životopisi: spremite jednom i kod sljedećeg posla ga nećete morati ponovno zalijepiti ili učitati.','Сохранённые резюме: сохраните один раз, и на следующей вакансии не придётся вставлять или загружать заново.','保存済みの履歴書：一度保存すれば、次の求人では貼り付けもアップロードも不要です。','सहेजे गए बायोडाटा: एक बार सहेजें, अगली नौकरी में दोबारा चिपकाना या अपलोड करना नहीं पड़ेगा।'],
 'על אלה כבר ענית פעם':['على هذه أجبت من قبل','You have already answered these','Vous avez déjà répondu à ceci','A esto ya respondiste','Diese haben Sie schon einmal beantwortet','A queste hai già risposto','A estas você já respondeu','Na ovo ste već odgovorili','На это вы уже отвечали','これらには回答済みです','इनका उत्तर आप पहले दे चुके हैं'],
