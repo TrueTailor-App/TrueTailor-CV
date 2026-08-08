@@ -1471,7 +1471,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.13</span>
+        <span class="tt-ver" id="verBadge">v38.14</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -1827,6 +1827,9 @@
         <div id="gapsOut" class="text-sm space-y-2 tt-scroll"></div>
       </div>
     </div>
+    <!-- The decision that used to be taken for the candidate. Filled by
+         renderFitGate() and empty until stage 2 has finished. -->
+    <div id="fitGate"></div>
   </section>
 
   <!-- NO CONNECTION BETWEEN THE RESUME AND THE POSTING -->
@@ -2094,7 +2097,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.13';
+var TT_VERSION = 'v38.14';
 
 var APP = {
   apiKey: '',
@@ -2125,6 +2128,7 @@ var APP = {
   verdictAfter: null,   // the fit as measured again against the finished document
   fitDelta: null,       // what the answers bought, computed in runFitRecheck
   narrative: {},        // {before,after} -> {headline, explanation, lang}
+  fitGateOpen: false,   // stage 2 has finished and the candidate has not decided yet
   analysisLang: '',     // the language stage 2 wrote its commentary in
   keyProblem: null,     // set when Google refuses the key, cleared on the next call that works
   world: null,          // stage 1b: what occupation each side belongs to
@@ -8036,6 +8040,68 @@ function ttLiveFileTemplate(tpl, font, noteHe) {
 }
 
 /* =========================================================================
+   THE STOP AFTER THE VERDICT
+
+   Reaching the verdict costs three calls: the posting is read, the two sides
+   are checked for being in the same world, and the requirements are compared.
+   The whole run costs somewhere between fifteen and twenty. And the run did not
+   stop in between: the moment the panel appeared the app carried straight on
+   into the questions and the writing, spending the other twelve to seventeen
+   calls out of the candidate's own quota before they had said anything.
+
+   They had already been told the answer. Someone reading "low match" has what
+   they came for, and the most useful thing the app can do at that point is stop
+   and let them take that somewhere else. Continuing anyway is not helpfulness,
+   it is the app assuming that the only acceptable outcome is a tailored file.
+
+   So the gate. What it costs is stated, because a free tier is a real budget
+   and this is the person's own key. The recommendation follows the level and
+   is only a recommendation: whoever wants to apply anyway is entitled to, and
+   the continue button is a normal button and not a dare. */
+function renderFitGate() {
+  var el = $('fitGate');
+  if (!el) return;
+  if (!APP.fitGateOpen) { el.innerHTML = ''; return; }
+
+  var v = APP.verdictBefore;
+  if (!v) { el.innerHTML = ''; return; }
+
+  /* Low and low to medium: the honest recommendation is to stop. Everything
+     above that: carry on. Either way both buttons are there. */
+  var poor = v.level <= 2;
+  var line = poor
+    ? H('לפי המדידה הזו, התאמה כאן דורשת ניסיון שלא נמצא בקורות החיים, ולא ניסוח אחר.')
+    : H('יש כאן בסיס לעבוד איתו. שלב 3 ישאל אותך על הפערים, ואז ייכתב הקובץ.');
+
+  el.innerHTML =
+    '<div class="tt-stepfoot" dir="' + TT_LANG.dir(TT_UI_LANG) + '">' +
+      '<button type="button" id="btnFitGo" class="tt-btn tt-btn-lg ' +
+        (poor ? '' : 'tt-btn-primary') + '">' + escapeHtml(H('המשך להתאמה ⟵')) + '</button>' +
+      '<button type="button" id="btnFitStop" class="tt-btn">' +
+        escapeHtml(H('עצור כאן')) + '</button>' +
+      '<div class="tt-foot-msg">' + escapeHtml(line + ' ' +
+        H('ההתאמה המלאה שולחת עוד כ־15 בקשות למפתח שלך ולוקחת כמה דקות.')) + '</div>' +
+    '</div>';
+
+  var go = $('btnFitGo');
+  if (go) go.addEventListener('click', function () {
+    APP.fitGateOpen = false;
+    renderFitGate();
+    continueAfterRelevance().catch(function (e) {
+      showError(H('ההרצה נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
+    });
+  });
+  var stop = $('btnFitStop');
+  if (stop) stop.addEventListener('click', function () {
+    APP.fitGateOpen = false;
+    renderFitGate();
+    setStatus(H('נעצר אחרי המדידה. הניתוח נשאר על המסך. אפשר להחליף את המשרה למעלה ולהריץ שוב.'));
+    var box = $('jobInput');
+    if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+/* =========================================================================
    THE SAVED RESUMES
 
    One resume, fifteen applications. Until now every one of them started from an
@@ -11834,8 +11900,16 @@ async function runPipeline() {
 
     /* Two gates, in this order. "Nothing to tailor" outranks "how wide should
        we read you", because there is no point choosing a vocabulary for a
-       resume that has no business being sent to this posting at all. */
-    await continueAfterRelevance();
+       resume that has no business being sent to this posting at all.
+
+       And before either of them, the candidate. The run used to continue from
+       here on its own; now it stops, says what the rest would cost, and waits.
+       continueAfterRelevance() is called from the button instead. */
+    APP.fitGateOpen = true;
+    renderFitGate();
+    setStatus(H('המדידה מוכנה. תחליט אם להמשיך להתאמה.'));
+    var gate = $('fitGate');
+    if (gate && gate.scrollIntoView) gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (e) {
     /* Same rule as the writing stage: a crash outside the guarded calls used to
        leave the spinner running with nothing to press. */
@@ -14523,7 +14597,7 @@ function resetRun() {
      frozen on screen: the snapshot is taken only when it is missing, and it was
      not missing any more. */
   APP.verdictBefore = null; APP.verdictAfter = null; APP.fitDelta = null;
-  APP.narrative = {}; APP.analysisLang = '';
+  APP.narrative = {}; APP.analysisLang = ''; APP.fitGateOpen = false;
   /* The mode belongs to one run against one posting, never to the session. A
      mode that survived into the next run would silently answer a question the
      candidate was never asked about a job they had not seen yet. */
@@ -14555,7 +14629,7 @@ function resetRun() {
   /* Hiding a card is not the same as emptying it. A card that is hidden with
      last run's coverage still inside comes back on the next run showing the
      previous job for as long as it takes the first stage to answer. */
-  ['spellOut', 'answersOut', 'chatLog', 'queueOut', 'signalsOut', 'gapsOut', 'matchVerdict', 'fitDelta',
+  ['spellOut', 'answersOut', 'chatLog', 'queueOut', 'signalsOut', 'gapsOut', 'matchVerdict', 'fitDelta', 'fitGate',
    'reviewOut', 'diffOut', 'keywordsOut', 'progressOut', 'atsOut', 'previewPage', 'finalStruct',
    'noRelationOut', 'previewActionNote', 'domainOut', 'prepOut', 'prepNote'].forEach(function (id) {
     var e = $(id);
@@ -16877,6 +16951,13 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'המשך להתאמה ⟵':['تابع إلى الملاءمة ⟵','Continue to the tailoring ⟶','Continuer vers l’adaptation ⟶','Continuar a la adaptación ⟶','Weiter zur Anpassung ⟶','Continua verso l’adattamento ⟶','Continuar para a adaptação ⟶','Nastavi na prilagodbu ⟶','Перейти к адаптации ⟶','調整へ進む ⟶','अनुकूलन पर जाएँ ⟶'],
+'עצור כאן':['توقّف هنا','Stop here','Arrêter ici','Detenerse aquí','Hier aufhören','Fermati qui','Parar aqui','Stani ovdje','Остановиться здесь','ここで終了','यहीं रोकें'],
+'ההתאמה המלאה שולחת עוד כ־15 בקשות למפתח שלך ולוקחת כמה דקות.':['الملاءمة الكاملة ترسل نحو 15 طلبًا إضافيًا عبر مفتاحك وتستغرق بضع دقائق.','The full tailoring sends about 15 more requests on your key and takes a few minutes.','L’adaptation complète envoie environ 15 requêtes de plus avec votre clé et prend quelques minutes.','La adaptación completa envía unas 15 solicitudes más con tu clave y tarda unos minutos.','Die vollständige Anpassung sendet rund 15 weitere Anfragen über Ihren Schlüssel und dauert einige Minuten.','L’adattamento completo invia circa 15 richieste in più con la tua chiave e richiede qualche minuto.','A adaptação completa envia cerca de 15 solicitações a mais com a sua chave e leva alguns minutos.','Potpuna prilagodba šalje još otprilike 15 zahtjeva preko vašeg ključa i traje nekoliko minuta.','Полная адаптация отправит ещё около 15 запросов по вашему ключу и займёт несколько минут.','完全な調整では、あなたのキーで約 15 件の追加リクエストを送信し、数分かかります。','पूर्ण अनुकूलन आपकी कुंजी से लगभग 15 और अनुरोध भेजता है और कुछ मिनट लेता है।'],
+'יש כאן בסיס לעבוד איתו. שלב 3 ישאל אותך על הפערים, ואז ייכתב הקובץ.':['هناك أساس للعمل عليه. المرحلة 3 ستسألك عن الفجوات، ثم يُكتب الملف.','There is a base to work with. Stage 3 will ask you about the gaps, and then the file is written.','Il y a une base exploitable. L’étape 3 vous interrogera sur les écarts, puis le fichier sera rédigé.','Hay una base con la que trabajar. La etapa 3 te preguntará por las brechas y luego se escribe el archivo.','Es gibt eine Grundlage, mit der sich arbeiten lässt. Schritt 3 fragt Sie zu den Lücken, danach wird die Datei geschrieben.','C’è una base su cui lavorare. La fase 3 ti chiederà dei divari, poi il file viene scritto.','Há uma base para trabalhar. A etapa 3 vai perguntar sobre as lacunas e depois o arquivo é escrito.','Postoji osnova za rad. Faza 3 pitat će vas o prazninama, a zatim se piše datoteka.','Есть основа для работы. Этап 3 задаст вопросы о пробелах, после чего пишется файл.','土台はあります。ステップ 3 で差についてお尋ねし、そのうえでファイルを作成します。','काम करने लायक आधार है। चरण 3 अंतरों के बारे में पूछेगा, फिर फ़ाइल लिखी जाएगी।'],
+'לפי המדידה הזו, התאמה כאן דורשת ניסיון שלא נמצא בקורות החיים, ולא ניסוח אחר.':['وفق هذا القياس، الملاءمة هنا تتطلب خبرة غير موجودة في السيرة الذاتية، لا صياغة مختلفة.','By this measurement, fitting here needs experience the resume does not contain, not different wording.','D’après cette mesure, réussir ici demande une expérience absente du CV, pas une autre formulation.','Según esta medición, encajar aquí exige experiencia que el currículum no contiene, no otra redacción.','Nach dieser Messung braucht es hier Erfahrung, die der Lebenslauf nicht enthält, und keine andere Formulierung.','Secondo questa misurazione, servire qui richiede esperienza che il CV non contiene, non una formulazione diversa.','Segundo esta medição, encaixar aqui exige experiência que o currículo não contém, e não outra redação.','Prema ovom mjerenju, ovdje je potrebno iskustvo kojega u životopisu nema, a ne drukčija formulacija.','По этому измерению здесь нужен опыт, которого в резюме нет, а не другие формулировки.','この測定では、ここで必要なのは履歴書にない経験であり、書き方の違いではありません。','इस माप के अनुसार, यहाँ ऐसा अनुभव चाहिए जो बायोडाटा में नहीं है, शब्दों का फेर नहीं।'],
+'המדידה מוכנה. תחליט אם להמשיך להתאמה.':['القياس جاهز. قرّر ما إذا كنت ستتابع إلى الملاءمة.','The measurement is ready. Decide whether to continue to the tailoring.','La mesure est prête. Décidez si vous continuez vers l’adaptation.','La medición está lista. Decide si continúas a la adaptación.','Die Messung ist fertig. Entscheiden Sie, ob Sie zur Anpassung weitergehen.','La misurazione è pronta. Decidi se continuare verso l’adattamento.','A medição está pronta. Decida se continua para a adaptação.','Mjerenje je gotovo. Odlučite želite li nastaviti na prilagodbu.','Измерение готово. Решите, продолжать ли к адаптации.','測定が完了しました。調整に進むかどうかお選びください。','माप तैयार है। तय करें कि अनुकूलन पर बढ़ना है या नहीं।'],
+'נעצר אחרי המדידה. הניתוח נשאר על המסך. אפשר להחליף את המשרה למעלה ולהריץ שוב.':['توقّف بعد القياس. التحليل يبقى على الشاشة. يمكنك تبديل الوظيفة أعلاه وتشغيله من جديد.','Stopped after the measurement. The analysis stays on screen. You can swap the posting above and run again.','Arrêté après la mesure. L’analyse reste à l’écran. Vous pouvez remplacer l’annonce ci-dessus et relancer.','Detenido tras la medición. El análisis se queda en pantalla. Puedes cambiar la oferta arriba y volver a ejecutar.','Nach der Messung gestoppt. Die Analyse bleibt auf dem Bildschirm. Sie können die Anzeige oben austauschen und erneut starten.','Fermato dopo la misurazione. L’analisi resta sullo schermo. Puoi sostituire l’annuncio sopra ed eseguire di nuovo.','Parado após a medição. A análise fica na tela. Você pode trocar a vaga acima e executar de novo.','Zaustavljeno nakon mjerenja. Analiza ostaje na zaslonu. Možete zamijeniti oglas iznad i pokrenuti ponovno.','Остановлено после измерения. Анализ остаётся на экране. Можно заменить вакансию выше и запустить снова.','測定後に停止しました。分析は画面に残ります。上の求人票を差し替えて再実行できます。','माप के बाद रोक दिया गया। विश्लेषण स्क्रीन पर बना रहेगा। ऊपर विज्ञापन बदलकर फिर चला सकते हैं।'],
 'שמור את קורות החיים האלה':['احفظ هذه السيرة الذاتية','Save this resume','Enregistrer ce CV','Guardar este currículum','Diesen Lebenslauf speichern','Salva questo CV','Salvar este currículo','Spremi ovaj životopis','Сохранить это резюме','この履歴書を保存','यह बायोडाटा सहेजें'],
 'השתמש':['استخدم','Use','Utiliser','Usar','Verwenden','Usa','Usar','Koristi','Использовать','使う','उपयोग करें'],
 'קורות חיים':['سيرة ذاتية','Resume','CV','Currículum','Lebenslauf','CV','Currículo','Životopis','Резюме','履歴書','बायोडाटा'],
@@ -17737,7 +17818,7 @@ var TT_PAINTERS = ['aboutNote','applyUiLang','bindStructurePanel','buildUiLangMe
   'renderFitBiasPicker','renderGrammarPanel','renderInterviewSheet','renderKeywords',
   'renderMatchVerdict','renderNoRelation','renderPreview','renderProgress','renderQueue',
   'renderReview','renderSignals','renderSpellNotice','renderStructurePanel',
-  'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','setChatBusy','setConsole','setFinalView','setKeyStatus',
+  'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','setChatBusy','setConsole','setFinalView','setKeyStatus',
   'setStage','setStatus','showNotice','syncBulletToggle','ttRenderLangBadge',
   'ttShareNote','updateLangButtons'];
 
