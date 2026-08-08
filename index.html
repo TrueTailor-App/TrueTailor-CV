@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.16</span>
+        <span class="tt-ver" id="verBadge">v38.17</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2109,7 +2109,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.16';
+var TT_VERSION = 'v38.17';
 
 var APP = {
   apiKey: '',
@@ -8521,6 +8521,12 @@ function renderCvVault() {
   if (!list.length && !hasText) { el.innerHTML = ''; return; }
 
   var html = '<div class="rounded-lg border border-slate-200 p-2" dir="' + TT_LANG.dir(TT_UI_LANG) + '">';
+  /* A bare button among nine other buttons is not an offer, it is furniture.
+     One line saying what it is for, because the reason to press it happens on
+     the NEXT job and not on this one. */
+  html += '<div class="text-[11px] text-slate-500 mb-1">' +
+    escapeHtml(H('קורות חיים שמורים: שמור פעם אחת, ובמשרה הבאה לא תצטרך להדביק או להעלות שוב.')) +
+    '</div>';
   html += '<div class="flex items-center gap-2 flex-wrap">' +
     (hasText ? '<button type="button" id="btnCvSave" class="tt-btn tt-btn-sm">' +
        escapeHtml(H('שמור את קורות החיים האלה')) + '</button>' : '') +
@@ -14057,6 +14063,11 @@ function bindIoUi() {
     try {
       $('resumeInput').value = await extractFile(f);
       updateLangBadges();
+      /* Setting .value in code does not fire an input event, so the panel that
+         listens for one never heard about an uploaded file and stayed empty.
+         Uploading is the most likely way a resume gets in here, which made the
+         whole feature invisible to anyone who did not paste. */
+      try { renderCvVault(); } catch (e) {}
       TT_CV_LAST_FILE = f;              // so it can be saved whole, not only as text
       var gotTemplate = await registerTemplateFromFile(f);
       setStatus(H('הקובץ נטען.') + (gotTemplate ? H(' נוסף טמפלט לפי העיצוב של הקובץ שהעלית.') : ''));
@@ -14102,6 +14113,7 @@ function bindIoUi() {
     try {
       var src = ttLangState().doc || detectLang(text);
       $('resumeInput').value = await translateText(text, target, src);
+      try { renderCvVault(); } catch (e) {}
       /* Decision 28. The document is now IN the target language, so that is
          what it is, not what it was. The app chose the target so it knows it
          with certainty and has no reason to detect it again, and a manual
@@ -14802,6 +14814,9 @@ function resetPanel(which) {
 
   resetRun();                          // clears APP.signals, the coverage and every card
   updateLangBadges();
+  /* And the other direction: the box is empty now, so the offer to save what is
+     in it has to go with it. */
+  try { renderCvVault(); } catch (e) {}
   showNotice('');
   setStatus(isResume ? H('תיבת קורות החיים נוקתה.') : H('תיבת המשרה נוקתה.'));
 }
@@ -17256,6 +17271,7 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'קורות חיים שמורים: שמור פעם אחת, ובמשרה הבאה לא תצטרך להדביק או להעלות שוב.':['سير ذاتية محفوظة: احفظها مرة واحدة، وفي الوظيفة التالية لن تحتاج إلى لصقها أو رفعها من جديد.','Saved resumes: save once, and on the next job you will not have to paste or upload it again.','CV enregistrés : enregistrez une fois, et au poste suivant vous n\u2019aurez plus à le coller ni à le téléverser.','Currículums guardados: guarda una vez y en el próximo empleo no tendrás que pegarlo ni subirlo otra vez.','Gespeicherte Lebensläufe: einmal speichern, und bei der nächsten Stelle müssen Sie ihn nicht erneut einfügen oder hochladen.','CV salvati: salva una volta e alla prossima offerta non dovrai incollarlo o caricarlo di nuovo.','Currículos salvos: salve uma vez e na próxima vaga você não precisará colar nem enviar de novo.','Spremljeni životopisi: spremite jednom i kod sljedećeg posla ga nećete morati ponovno zalijepiti ili učitati.','Сохранённые резюме: сохраните один раз, и на следующей вакансии не придётся вставлять или загружать заново.','保存済みの履歴書：一度保存すれば、次の求人では貼り付けもアップロードも不要です。','सहेजे गए बायोडाटा: एक बार सहेजें, अगली नौकरी में दोबारा चिपकाना या अपलोड करना नहीं पड़ेगा।'],
 'על אלה כבר ענית פעם':['على هذه أجبت من قبل','You have already answered these','Vous avez déjà répondu à ceci','A esto ya respondiste','Diese haben Sie schon einmal beantwortet','A queste hai già risposto','A estas você já respondeu','Na ovo ste već odgovorili','На это вы уже отвечали','これらには回答済みです','इनका उत्तर आप पहले दे चुके हैं'],
 'מה שתאשר ייכנס כאילו ענית עכשיו, ולא יישאל שוב. מה שתסיר יישאל בשיחה.':['ما تؤكده يُسجَّل كأنك أجبت الآن ولن يُسأل مجددًا. وما تزيله سيُسأل في المحادثة.','What you confirm goes in as if you answered now and is not asked again. What you remove is asked in the conversation.','Ce que vous confirmez est enregistré comme si vous veniez de répondre et n’est plus demandé. Ce que vous retirez sera demandé dans la conversation.','Lo que confirmes entra como si acabaras de responder y no se vuelve a preguntar. Lo que quites se preguntará en la conversación.','Was Sie bestätigen, wird übernommen, als hätten Sie es gerade beantwortet, und wird nicht erneut gefragt. Was Sie entfernen, wird im Gespräch gefragt.','Ciò che confermi entra come se avessi appena risposto e non viene richiesto di nuovo. Ciò che togli viene chiesto nella conversazione.','O que você confirmar entra como se tivesse respondido agora e não é perguntado de novo. O que remover será perguntado na conversa.','Ono što potvrdite ulazi kao da ste upravo odgovorili i više se ne pita. Ono što uklonite pitat će se u razgovoru.','То, что вы подтвердите, войдёт так, будто вы ответили сейчас, и больше не спросится. То, что уберёте, спросят в разговоре.','確認したものは、いま回答したものとして記録され、再度は尋ねません。外したものは対話の中で尋ねます。','जिसे आप पुष्टि करेंगे वह ऐसे दर्ज होगा मानो अभी उत्तर दिया हो, और दोबारा नहीं पूछा जाएगा। जिसे हटाएँगे वह बातचीत में पूछा जाएगा।'],
 'נשאלת: ':['سُئلت: ','You were asked: ','On vous a demandé : ','Se te preguntó: ','Gefragt wurde: ','Ti è stato chiesto: ','Perguntaram: ','Pitani ste: ','Вас спросили: ','質問：','आपसे पूछा गया: '],
