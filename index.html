@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.17</span>
+        <span class="tt-ver" id="verBadge">v38.18</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2109,7 +2109,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.17';
+var TT_VERSION = 'v38.18';
 
 var APP = {
   apiKey: '',
@@ -2141,6 +2141,7 @@ var APP = {
   fitDelta: null,       // what the answers bought, computed in runFitRecheck
   narrative: {},        // {before,after} -> {headline, explanation, lang}
   reuse: null,          // answers from earlier runs matched to this posting's gaps
+  runModels: null,      // which model answered each of the two measuring stages
   fitGateOpen: false,   // stage 2 has finished and the candidate has not decided yet
   analysisLang: '',     // the language stage 2 wrote its commentary in
   keyProblem: null,     // set when Google refuses the key, cleared on the next call that works
@@ -6376,6 +6377,11 @@ var OCR_PROMPT = [
 /* ---------------- stage 1: signals ---------------- */
 var REQ_KINDS = { hard_skill: 1, tool: 1, soft_skill: 1, responsibility: 1, domain: 1, certification: 1, education: 1 };
 
+function ttRecordSignalsModel() {
+  if (!APP.runModels) APP.runModels = {};
+  APP.runModels.signals = TT_LAST_MODEL;
+}
+
 function normalizeSignals(obj) {
   obj = obj || {};
   var reqs = Array.isArray(obj.requirements) ? obj.requirements : [];
@@ -6445,9 +6451,24 @@ var TT_TOKENS = { signals: 16000, coverage: 24000, synthesis: 16000, skills: 160
 
 async function stepExtractSignals(jobText) {
   var raw = await callGemini(promptSignals(jobText, currentDocLang()), {
-    json: true, temperature: 0.2, maxOutputTokens: TT_TOKENS.signals, timeoutMs: 90000,
+    /* ---------- ZERO, AND WHY IT MATTERS HERE AND NOT ELSEWHERE ----------
+       Measured on one real pairing, three runs, nothing changed between them:
+       73, 73, 54. That is not a rounding difference, it is a different answer
+       to the same question, and everything built on top of the number inherits
+       it: the five levels, the gate cap, and the before and after comparison,
+       which measures a difference and therefore cannot survive a noise floor
+       larger than the difference it is looking for.
+
+       Sampling temperature is one of two things that could produce that, and it
+       is the one that costs nothing to remove. Writing wants a little warmth so
+       that a line does not read like a form. Reading a document and deciding
+       what it proves wants none: there is a right answer and the model should
+       give the same one twice. Left at 0.2 out of a habit that belongs to the
+       stages that write. */
+    json: true, temperature: 0, maxOutputTokens: TT_TOKENS.signals, timeoutMs: 90000,
     failOnTruncation: true
   });
+  ttRecordSignalsModel();
   return ttMergeDuplicateRequirements(normalizeSignals(safeJsonParse(raw)));
 }
 
@@ -7360,9 +7381,25 @@ ttLiveFields(TT_DISTANCE, ['he']);
 
 async function stepCoverage() {
   var raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
-    json: true, temperature: 0.25, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
+    /* Same reason as stage 1, and this is the one that moves the score: the run
+       that came back 54 had proved 5 of 11 must haves where the two that came
+       back 73 had proved eight or nine of the same eleven. The requirement list
+       held; three rows were simply read differently. */
+    json: true, temperature: 0, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
     failOnTruncation: true
   });
+  /* ---------- WHO MEASURED ----------
+       The cascade drops to the next model on a 429, and a free tier answers 429
+       to a third run inside a few minutes. So the same document can be read by
+       a different model between one run and the next, without a word on screen
+       about it, and the two readings do not have to agree. That is the second
+       suspect for the 73, 73, 54, and unlike temperature it cannot be removed:
+       falling back is what keeps the run alive. It can be SHOWN, and it belongs
+       on screen anyway. A measurement without the instrument named is half a
+       measurement. */
+  if (!APP.runModels) APP.runModels = {};
+  APP.runModels.coverage = TT_LAST_MODEL;
+
   var obj = safeJsonParse(raw);
   if (!obj) throw new Error(H('לא הצלחתי לקרוא את תשובת ההשוואה. נסה שוב.'));
   /* Stage 2 is told to write its commentary in the interface language, and it
@@ -8779,7 +8816,21 @@ function ttVerdictFacts(v) {
     (v.musts ? H('<span>דרישות חובה מוכחות: <b>') + v.mustsProved + '/' + v.musts + '</b></span>' : '') +
     (v.kwOverlap != null ? H('<span>חפיפת מילות מפתח: <b>') + Math.round(v.kwOverlap * 100) + '%</b></span>' : '') +
     H('<span>התאמות ישירות: <b>') + v.direct + '</b></span>' +
+    ttMeasuredBy() +
     '</div>';
+}
+
+/* Quiet, and last in the row. It is not a headline, but somebody comparing two
+   runs that disagree has no other way to find out whether they were even read
+   by the same thing. */
+function ttMeasuredBy() {
+  var m = APP.runModels;
+  if (!m || (!m.signals && !m.coverage)) return '';
+  var names = [];
+  if (m.coverage) names.push(m.coverage);
+  if (m.signals && m.signals !== m.coverage) names.push(m.signals);
+  if (!names.length) return '';
+  return '<span style="opacity:.75">' + escapeHtml(H('נמדד על ידי ') + names.join(' · ')) + '</span>';
 }
 
 /* What is missing, said with its own name. The three blocks answer three
@@ -14878,6 +14929,7 @@ function resetRun() {
      not missing any more. */
   APP.verdictBefore = null; APP.verdictAfter = null; APP.fitDelta = null;
   APP.narrative = {}; APP.analysisLang = ''; APP.fitGateOpen = false; APP.reuse = null;
+  APP.runModels = null;
   /* The mode belongs to one run against one posting, never to the session. A
      mode that survived into the next run would silently answer a question the
      candidate was never asked about a job they had not seen yet. */
@@ -17271,6 +17323,7 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'נמדד על ידי ':['قِيس بواسطة ','measured by ','mesuré par ','medido por ','gemessen von ','misurato da ','medido por ','izmjerio ','измерено моделью ','測定モデル：','मापन किया '],
 'קורות חיים שמורים: שמור פעם אחת, ובמשרה הבאה לא תצטרך להדביק או להעלות שוב.':['سير ذاتية محفوظة: احفظها مرة واحدة، وفي الوظيفة التالية لن تحتاج إلى لصقها أو رفعها من جديد.','Saved resumes: save once, and on the next job you will not have to paste or upload it again.','CV enregistrés : enregistrez une fois, et au poste suivant vous n\u2019aurez plus à le coller ni à le téléverser.','Currículums guardados: guarda una vez y en el próximo empleo no tendrás que pegarlo ni subirlo otra vez.','Gespeicherte Lebensläufe: einmal speichern, und bei der nächsten Stelle müssen Sie ihn nicht erneut einfügen oder hochladen.','CV salvati: salva una volta e alla prossima offerta non dovrai incollarlo o caricarlo di nuovo.','Currículos salvos: salve uma vez e na próxima vaga você não precisará colar nem enviar de novo.','Spremljeni životopisi: spremite jednom i kod sljedećeg posla ga nećete morati ponovno zalijepiti ili učitati.','Сохранённые резюме: сохраните один раз, и на следующей вакансии не придётся вставлять или загружать заново.','保存済みの履歴書：一度保存すれば、次の求人では貼り付けもアップロードも不要です。','सहेजे गए बायोडाटा: एक बार सहेजें, अगली नौकरी में दोबारा चिपकाना या अपलोड करना नहीं पड़ेगा।'],
 'על אלה כבר ענית פעם':['على هذه أجبت من قبل','You have already answered these','Vous avez déjà répondu à ceci','A esto ya respondiste','Diese haben Sie schon einmal beantwortet','A queste hai già risposto','A estas você já respondeu','Na ovo ste već odgovorili','На это вы уже отвечали','これらには回答済みです','इनका उत्तर आप पहले दे चुके हैं'],
 'מה שתאשר ייכנס כאילו ענית עכשיו, ולא יישאל שוב. מה שתסיר יישאל בשיחה.':['ما تؤكده يُسجَّل كأنك أجبت الآن ولن يُسأل مجددًا. وما تزيله سيُسأل في المحادثة.','What you confirm goes in as if you answered now and is not asked again. What you remove is asked in the conversation.','Ce que vous confirmez est enregistré comme si vous veniez de répondre et n’est plus demandé. Ce que vous retirez sera demandé dans la conversation.','Lo que confirmes entra como si acabaras de responder y no se vuelve a preguntar. Lo que quites se preguntará en la conversación.','Was Sie bestätigen, wird übernommen, als hätten Sie es gerade beantwortet, und wird nicht erneut gefragt. Was Sie entfernen, wird im Gespräch gefragt.','Ciò che confermi entra come se avessi appena risposto e non viene richiesto di nuovo. Ciò che togli viene chiesto nella conversazione.','O que você confirmar entra como se tivesse respondido agora e não é perguntado de novo. O que remover será perguntado na conversa.','Ono što potvrdite ulazi kao da ste upravo odgovorili i više se ne pita. Ono što uklonite pitat će se u razgovoru.','То, что вы подтвердите, войдёт так, будто вы ответили сейчас, и больше не спросится. То, что уберёте, спросят в разговоре.','確認したものは、いま回答したものとして記録され、再度は尋ねません。外したものは対話の中で尋ねます。','जिसे आप पुष्टि करेंगे वह ऐसे दर्ज होगा मानो अभी उत्तर दिया हो, और दोबारा नहीं पूछा जाएगा। जिसे हटाएँगे वह बातचीत में पूछा जाएगा।'],
