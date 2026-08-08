@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.15</span>
+        <span class="tt-ver" id="verBadge">v38.16</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -1899,6 +1899,9 @@
       <div class="tt-sub mt-1.5" id="qHint">המספר הוא תקרה, לא מכסה. שאלה אחת יכולה לכסות כמה דרישות קרובות, ואם כל הפערים ייסגרו קודם השיחה תסתיים מוקדם יותר.</div>
     </div>
 
+    <!-- What you have already answered, before the conversation starts rather
+         than after it has asked you again. Filled by renderAnswerReuse(). -->
+    <div id="answerReuse" class="mb-3"></div>
     <div id="queueOut" class="mb-2"></div>
 
     <div id="chatLog" class="tt-chat space-y-3 mb-3"></div>
@@ -2106,7 +2109,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.15';
+var TT_VERSION = 'v38.16';
 
 var APP = {
   apiKey: '',
@@ -2137,6 +2140,7 @@ var APP = {
   verdictAfter: null,   // the fit as measured again against the finished document
   fitDelta: null,       // what the answers bought, computed in runFitRecheck
   narrative: {},        // {before,after} -> {headline, explanation, lang}
+  reuse: null,          // answers from earlier runs matched to this posting's gaps
   fitGateOpen: false,   // stage 2 has finished and the candidate has not decided yet
   analysisLang: '',     // the language stage 2 wrote its commentary in
   keyProblem: null,     // set when Google refuses the key, cleared on the next call that works
@@ -8049,6 +8053,233 @@ function ttLiveFileTemplate(tpl, font, noteHe) {
 }
 
 /* =========================================================================
+   THE ANSWER BANK
+
+   Most of what stage 3 asks is not about this posting. How many people were on
+   the team, how many years on that system, which regulator the plant answered
+   to: these are facts about a career, and they do not change because a different
+   company wrote a different advertisement. A person applying to fifteen jobs was
+   being asked them fifteen times.
+
+   WHY IT IS A SCREEN AND NOT A QUIET SUBSTITUTION
+
+   Reusing an answer means putting words the candidate wrote weeks ago in front
+   of a requirement they have not read yet. Two things could go wrong quietly:
+   the match is wrong, or the answer has aged. "A team of eight" was true and may
+   not be now. So nothing is reused without being seen: the matches are shown
+   with the question they were given to and the date they were given, and each
+   one is confirmed, edited, or thrown back into the conversation.
+
+   AND WHY A CONFIRMED ANSWER IS RECORDED AS IF IT WERE GIVEN NOW
+
+   This is the part that nearly went wrong. The obvious implementation is to
+   mark the matched requirements as handled and let the conversation skip them.
+   That would have broken the scoring built in v38.12 in silence: a requirement
+   can only rise when an answer produced a line that was approved into the
+   document, and an answer that never entered APP.chat.qa never reaches the
+   writing stage, never produces a line, and therefore can never close its gap.
+   The candidate would have confirmed an answer and watched the requirement stay
+   open with no explanation. So a confirmed answer is pushed into qa exactly like
+   one typed a moment ago, and every stage downstream cannot tell the difference.
+   Only then is the requirement taken out of the queue.
+   ========================================================================= */
+var TT_BANK_KEY = 'tt_answer_bank_v1';
+var TT_BANK_MAX = 60;
+
+function ttBankLoad() {
+  try {
+    var raw = localStorage.getItem(TT_BANK_KEY);
+    var list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+
+function ttBankWrite(list) {
+  try { localStorage.setItem(TT_BANK_KEY, JSON.stringify(list.slice(0, TT_BANK_MAX))); return true; }
+  catch (e) { return false; }
+}
+
+/* Written as the answer is given, not at the end of the run: a run that is
+   abandoned at stage 5 still cost the candidate the typing. */
+function ttBankRemember(entry) {
+  if (!entry || entry.skipped || entry.closing) return;
+  var text = String(entry.a || '').trim();
+  if (!text) return;
+  var ids = (entry.reqIds && entry.reqIds.length) ? entry.reqIds : (entry.reqId ? [entry.reqId] : []);
+  var reqText = ids.map(function (id) { var r = reqById(id); return r ? r.text : ''; })
+                   .filter(Boolean).join(' · ');
+  if (!reqText) return;
+
+  var list = ttBankLoad();
+  var rec = {
+    id: 'ab' + Date.now() + Math.floor(Math.random() * 1000),
+    q: entry.q, a: text, reqText: reqText,
+    savedAt: new Date().toISOString(),
+    lang: APP.chat && APP.chat.lang ? APP.chat.lang : ''
+  };
+  /* The same answer to the same requirement is one fact that was restated, not
+     two. Kept once, with the later date. */
+  var dupAt = -1;
+  list.forEach(function (b, i) {
+    if (b && b.reqText === reqText && String(b.a).trim() === text) dupAt = i;
+  });
+  if (dupAt >= 0) list.splice(dupAt, 1);
+  list.unshift(rec);
+  ttBankWrite(list);
+}
+
+function promptBankMatch(bank, reqs) {
+  return [
+    'A candidate answered questions about earlier job postings. Their answers are below,',
+    'each with the requirement it was given for. A new posting has the requirements listed after them.',
+    '',
+    'For each NEW requirement, say whether one of the stored answers already answers it.',
+    'Match on what the answer actually says, not on similar wording. An answer about managing a team',
+    'does not answer a requirement about a specific software product. A named system matches only',
+    'the same named system, never a different one, however close the two are.',
+    'If nothing genuinely answers a requirement, leave it out. Leaving it out is the safe choice',
+    'and it is expected to be the common one.',
+    '',
+    'Return ONLY this JSON, nothing before it and nothing after it:',
+    '{"items":[{"req_id":"","answer_id":""}]}',
+    '',
+    'STORED ANSWERS:',
+    bank.map(function (b) {
+      return b.id + ' | ANSWERED FOR: ' + b.reqText + ' | QUESTION: ' + b.q + ' | ANSWER: ' + b.a;
+    }).join('\n'),
+    '',
+    'THE NEW POSTING NEEDS:',
+    reqs.map(function (r) { return r.id + ' | ' + r.text; }).join('\n')
+  ].join('\n');
+}
+
+/* One call, at the top of stage 3, over the whole bank at once. Per question it
+   would have cost more than the questions it saves. A failure means the
+   conversation runs exactly as it did before this feature existed. */
+async function ttBankMatch() {
+  var bank = ttBankLoad();
+  if (!bank.length || !APP.queue.length || !getApiKey()) return [];
+  var reqs = APP.queue.map(function (q) { return reqById(q.req_id); }).filter(Boolean);
+  if (!reqs.length) return [];
+  try {
+    var raw = await callGemini(promptBankMatch(bank.slice(0, 40), reqs), {
+      json: true, temperature: 0, maxOutputTokens: 2000, timeoutMs: 60000
+    });
+    var obj = safeJsonParse(raw);
+    var out = [];
+    var seen = {};
+    ((obj && obj.items) || []).forEach(function (it) {
+      if (!it || !it.req_id || !it.answer_id) return;
+      if (seen[it.req_id]) return;
+      var req = reqById(it.req_id);
+      var rec = null;
+      bank.forEach(function (b) { if (b.id === it.answer_id) rec = b; });
+      if (!req || !rec) return;
+      seen[it.req_id] = 1;
+      out.push({ reqId: req.id, reqText: req.text, bank: rec, state: 'on', text: rec.a });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+
+function renderAnswerReuse() {
+  var el = $('answerReuse');
+  if (!el) return;
+  var list = (APP.reuse && APP.reuse.rows) || [];
+  if (!list.length || (APP.reuse && APP.reuse.done)) { el.innerHTML = ''; return; }
+
+  var html = '<div class="rounded-lg border border-sky-200 bg-sky-50 p-3" dir="' + TT_LANG.dir(TT_UI_LANG) + '">' +
+    '<div class="text-sm font-semibold text-sky-900">' + escapeHtml(H('על אלה כבר ענית פעם')) + '</div>' +
+    '<p class="text-xs text-sky-900 mt-1">' + escapeHtml(H('מה שתאשר ייכנס כאילו ענית עכשיו, ולא יישאל שוב. מה שתסיר יישאל בשיחה.')) + '</p>' +
+    '<ul class="mt-2 space-y-2">';
+
+  list.forEach(function (row, i) {
+    var when = '';
+    try { when = new Date(row.bank.savedAt).toLocaleDateString(); } catch (e) {}
+    html += '<li class="rounded-lg border border-sky-200 bg-white p-2 text-xs">' +
+      '<div class="font-semibold">' + escapeHtml(row.reqText) + '</div>' +
+      '<div class="text-slate-500 mt-1">' + escapeHtml(H('נשאלת: ') + row.bank.q) + '</div>' +
+      '<textarea class="tt-field tt-line mt-1 tt-reuse-text" data-i="' + i + '" rows="2">' +
+        escapeHtml(row.text) + '</textarea>' +
+      '<div class="flex items-center gap-2 mt-1 flex-wrap">' +
+        '<span class="text-slate-400">' + escapeHtml(H('נענתה ב־') + when) + '</span>' +
+        '<button type="button" class="tt-btn tt-btn-sm tt-reuse-off" data-i="' + i + '" ' +
+          'style="margin-inline-start:auto">' + escapeHtml(H('שאל אותי מחדש')) + '</button>' +
+      '</div></li>';
+  });
+
+  html += '</ul><div class="flex items-center gap-2 mt-3 flex-wrap">' +
+    '<button type="button" id="btnReuseApply" class="tt-btn tt-btn-primary">' +
+      escapeHtml(H('אשר והמשך')) + '</button>' +
+    '<button type="button" id="btnReuseNone" class="tt-btn">' +
+      escapeHtml(H('שאל אותי על הכל')) + '</button>' +
+    '</div></div>';
+  el.innerHTML = html;
+
+  var texts = el.querySelectorAll('.tt-reuse-text');
+  for (var t = 0; t < texts.length; t++) {
+    texts[t].addEventListener('input', function (ev) {
+      var i = Number(ev.currentTarget.getAttribute('data-i'));
+      if (APP.reuse && APP.reuse.rows[i]) APP.reuse.rows[i].text = ev.currentTarget.value;
+    });
+  }
+  var offs = el.querySelectorAll('.tt-reuse-off');
+  for (var o = 0; o < offs.length; o++) {
+    offs[o].addEventListener('click', function (ev) {
+      var i = Number(ev.currentTarget.getAttribute('data-i'));
+      if (APP.reuse && APP.reuse.rows[i]) APP.reuse.rows.splice(i, 1);
+      renderAnswerReuse();
+    });
+  }
+  var apply = $('btnReuseApply');
+  if (apply) apply.addEventListener('click', function () { ttReuseApply(true); });
+  var none = $('btnReuseNone');
+  if (none) none.addEventListener('click', function () { ttReuseApply(false); });
+}
+
+async function ttReuseApply(keep) {
+  var rows = (APP.reuse && APP.reuse.rows) || [];
+  var used = 0;
+  if (keep) {
+    rows.forEach(function (row) {
+      var text = String(row.text || '').trim();
+      if (!text) return;
+      /* Recorded exactly as submitAnswer records one. Anything less and the
+         writing stage never sees it and the gap can never close. */
+      APP.chat.qa.push({
+        q: row.bank.q, a: text, skipped: false,
+        reqId: row.reqId, reqIds: [row.reqId],
+        closing: false, aForCv: '', aLangFrom: '', translateNote: '',
+        fromBank: true
+      });
+      APP.chat.turns.push({ role: 'model', text: row.bank.q, lang: APP.chat.lang });
+      APP.chat.turns.push({ role: 'user', text: text, lang: APP.chat.lang });
+      used++;
+    });
+    /* Only now, and only for the ones that were actually recorded. */
+    var handled = {};
+    rows.forEach(function (row) { if (String(row.text || '').trim()) handled[row.reqId] = 1; });
+    APP.queue = APP.queue.filter(function (q) { return !handled[q.req_id]; });
+    APP.chat.max = questionBudget(APP.queue);
+  }
+  APP.reuse.done = true;
+  renderAnswerReuse();
+  renderQueue();
+  renderChat();
+  renderChatProgress(false);
+  if (used) setStatus(used + H(' תשובות קודמות נכנסו. השיחה תשאל רק על מה שנשאר.'));
+
+  if (!APP.queue.length) {
+    /* Everything the conversation had to cover is already covered. */
+    finishChat();
+    return;
+  }
+  var row = $('chatInputRow');
+  if (row) row.classList.remove('tt-hidden');
+  await askNextQuestion(chatTurnInstruction(APP.chat.lang, true));
+}
+
+/* =========================================================================
    THE STOP AFTER THE VERDICT
 
    Reaching the verdict costs three calls: the posting is read, the two sides
@@ -9376,6 +9607,7 @@ async function submitAnswer(skipped) {
     aForCv: '', aLangFrom: '', translateNote: ''
   };
   APP.chat.qa.push(entry);
+  try { ttBankRemember(entry); } catch (e) {}
   APP.chat.pendingQuestion = '';
   APP.chat.pendingReqId = '';
   APP.chat.pendingReqIds = [];
@@ -11942,10 +12174,33 @@ async function startQuestions() {
      twelve that is, rather than being folded into Hebrew or English. */
   APP.chat.lang = docLanguage(APP.doc) || 'he';
   APP.chat.qa = [];
+  var inRow = $('chatInputRow');
+  if (inRow) inRow.classList.add('tt-hidden');
   updateLangButtons();
   renderQueue();
   renderChatProgress(false);
   show('chatCard');
+
+  /* Before the first question, not after the fifteenth: whatever this candidate
+     has already answered is matched against the gaps of this posting in one
+     call, and shown. The conversation starts only once that is settled, so the
+     budget is spent on what is genuinely still unknown. */
+  APP.reuse = null;
+  renderAnswerReuse();
+  var matched = [];
+  try {
+    setStatus(H('בודק אם כבר ענית על חלק מזה בעבר...'), true);
+    matched = await ttBankMatch();
+  } catch (e) { matched = []; }
+  setStatus('');
+  if (matched.length) {
+    APP.reuse = { rows: matched, done: false };
+    renderAnswerReuse();
+    var rr = $('answerReuse');
+    if (rr && rr.scrollIntoView) rr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;                      // ttReuseApply() carries on from here
+  }
+
   var row = $('chatInputRow');
   if (row) row.classList.remove('tt-hidden');
   await askNextQuestion(chatTurnInstruction(APP.chat.lang, true));
@@ -14607,7 +14862,7 @@ function resetRun() {
      frozen on screen: the snapshot is taken only when it is missing, and it was
      not missing any more. */
   APP.verdictBefore = null; APP.verdictAfter = null; APP.fitDelta = null;
-  APP.narrative = {}; APP.analysisLang = ''; APP.fitGateOpen = false;
+  APP.narrative = {}; APP.analysisLang = ''; APP.fitGateOpen = false; APP.reuse = null;
   /* The mode belongs to one run against one posting, never to the session. A
      mode that survived into the next run would silently answer a question the
      candidate was never asked about a job they had not seen yet. */
@@ -14639,7 +14894,7 @@ function resetRun() {
   /* Hiding a card is not the same as emptying it. A card that is hidden with
      last run's coverage still inside comes back on the next run showing the
      previous job for as long as it takes the first stage to answer. */
-  ['spellOut', 'answersOut', 'chatLog', 'queueOut', 'signalsOut', 'gapsOut', 'matchVerdict', 'fitDelta', 'fitGate',
+  ['spellOut', 'answersOut', 'chatLog', 'queueOut', 'answerReuse', 'signalsOut', 'gapsOut', 'matchVerdict', 'fitDelta', 'fitGate',
    'reviewOut', 'diffOut', 'keywordsOut', 'progressOut', 'atsOut', 'previewPage', 'finalStruct',
    'noRelationOut', 'previewActionNote', 'domainOut', 'prepOut', 'prepNote'].forEach(function (id) {
     var e = $(id);
@@ -17001,6 +17256,15 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'על אלה כבר ענית פעם':['على هذه أجبت من قبل','You have already answered these','Vous avez déjà répondu à ceci','A esto ya respondiste','Diese haben Sie schon einmal beantwortet','A queste hai già risposto','A estas você já respondeu','Na ovo ste već odgovorili','На это вы уже отвечали','これらには回答済みです','इनका उत्तर आप पहले दे चुके हैं'],
+'מה שתאשר ייכנס כאילו ענית עכשיו, ולא יישאל שוב. מה שתסיר יישאל בשיחה.':['ما تؤكده يُسجَّل كأنك أجبت الآن ولن يُسأل مجددًا. وما تزيله سيُسأل في المحادثة.','What you confirm goes in as if you answered now and is not asked again. What you remove is asked in the conversation.','Ce que vous confirmez est enregistré comme si vous veniez de répondre et n’est plus demandé. Ce que vous retirez sera demandé dans la conversation.','Lo que confirmes entra como si acabaras de responder y no se vuelve a preguntar. Lo que quites se preguntará en la conversación.','Was Sie bestätigen, wird übernommen, als hätten Sie es gerade beantwortet, und wird nicht erneut gefragt. Was Sie entfernen, wird im Gespräch gefragt.','Ciò che confermi entra come se avessi appena risposto e non viene richiesto di nuovo. Ciò che togli viene chiesto nella conversazione.','O que você confirmar entra como se tivesse respondido agora e não é perguntado de novo. O que remover será perguntado na conversa.','Ono što potvrdite ulazi kao da ste upravo odgovorili i više se ne pita. Ono što uklonite pitat će se u razgovoru.','То, что вы подтвердите, войдёт так, будто вы ответили сейчас, и больше не спросится. То, что уберёте, спросят в разговоре.','確認したものは、いま回答したものとして記録され、再度は尋ねません。外したものは対話の中で尋ねます。','जिसे आप पुष्टि करेंगे वह ऐसे दर्ज होगा मानो अभी उत्तर दिया हो, और दोबारा नहीं पूछा जाएगा। जिसे हटाएँगे वह बातचीत में पूछा जाएगा।'],
+'נשאלת: ':['سُئلت: ','You were asked: ','On vous a demandé : ','Se te preguntó: ','Gefragt wurde: ','Ti è stato chiesto: ','Perguntaram: ','Pitani ste: ','Вас спросили: ','質問：','आपसे पूछा गया: '],
+'נענתה ב־':['أُجيب في ','answered on ','répondu le ','respondida el ','beantwortet am ','risposta il ','respondida em ','odgovoreno ','отвечено ','回答日：','उत्तर दिया गया '],
+'שאל אותי מחדש':['اسألني من جديد','Ask me again','Me redemander','Preguntarme de nuevo','Mich erneut fragen','Chiedimelo di nuovo','Perguntar de novo','Pitaj me ponovno','Спросить снова','もう一度聞いて','मुझसे फिर पूछें'],
+'אשר והמשך':['أكّد وتابع','Confirm and continue','Confirmer et continuer','Confirmar y continuar','Bestätigen und fortfahren','Conferma e continua','Confirmar e continuar','Potvrdi i nastavi','Подтвердить и продолжить','確認して続行','पुष्टि करें और आगे बढ़ें'],
+'שאל אותי על הכל':['اسألني عن كل شيء','Ask me everything','Tout me demander','Preguntarme todo','Mich alles fragen','Chiedimi tutto','Perguntar tudo','Pitaj me sve','Спросить обо всём','すべて聞いて','मुझसे सब पूछें'],
+'בודק אם כבר ענית על חלק מזה בעבר...':['أتحقق مما إذا كنت قد أجبت على بعض هذا سابقًا...','Checking whether you have already answered some of this...','Vérification de ce à quoi vous avez déjà répondu...','Comprobando si ya respondiste parte de esto...','Prüfe, ob Sie einen Teil davon schon beantwortet haben...','Controllo se hai già risposto ad alcune di queste...','Verificando se você já respondeu parte disso...','Provjeravam jeste li na nešto od ovoga već odgovorili...','Проверяю, отвечали ли вы на что-то из этого раньше...','すでに回答済みの項目がないか確認しています...','देख रहे हैं कि इनमें से कुछ का उत्तर आप पहले दे चुके हैं या नहीं...'],
+' תשובות קודמות נכנסו. השיחה תשאל רק על מה שנשאר.':[' إجابات سابقة أُدرجت. المحادثة ستسأل عمّا تبقّى فقط.',' earlier answers were entered. The conversation will ask only about what is left.',' réponses antérieures ont été intégrées. La conversation ne portera que sur le reste.',' respuestas anteriores se incorporaron. La conversación preguntará solo por lo que queda.',' frühere Antworten wurden übernommen. Das Gespräch fragt nur noch nach dem Rest.',' risposte precedenti sono state inserite. La conversazione chiederà solo il resto.',' respostas anteriores foram inseridas. A conversa vai perguntar só o que falta.',' ranijih odgovora je uneseno. Razgovor će pitati samo ono što je ostalo.',' прежних ответов внесены. Разговор спросит только об оставшемся.',' 件の以前の回答を取り込みました。残りについてのみ質問します。',' पुराने उत्तर दर्ज हुए। बातचीत केवल बाकी के बारे में पूछेगी।'],
 'מחק את קורות החיים השמורים':['احذف السيرة الذاتية المحفوظة','Delete this saved resume','Supprimer ce CV enregistré','Eliminar este currículum guardado','Diesen gespeicherten Lebenslauf löschen','Elimina questo CV salvato','Excluir este currículo salvo','Izbriši ovaj spremljeni životopis','Удалить это сохранённое резюме','保存済みのこの履歴書を削除','यह सहेजा गया बायोडाटा हटाएँ'],
 'המשך להתאמה ⟵':['تابع إلى الملاءمة ⟵','Continue to the tailoring ⟶','Continuer vers l’adaptation ⟶','Continuar a la adaptación ⟶','Weiter zur Anpassung ⟶','Continua verso l’adattamento ⟶','Continuar para a adaptação ⟶','Nastavi na prilagodbu ⟶','Перейти к адаптации ⟶','調整へ進む ⟶','अनुकूलन पर जाएँ ⟶'],
 'עצור כאן':['توقّف هنا','Stop here','Arrêter ici','Detenerse aquí','Hier aufhören','Fermati qui','Parar aqui','Stani ovdje','Остановиться здесь','ここで終了','यहीं रोकें'],
@@ -17869,7 +18133,7 @@ var TT_PAINTERS = ['aboutNote','applyUiLang','bindStructurePanel','buildUiLangMe
   'renderFitBiasPicker','renderGrammarPanel','renderInterviewSheet','renderKeywords',
   'renderMatchVerdict','renderNoRelation','renderPreview','renderProgress','renderQueue',
   'renderReview','renderSignals','renderSpellNotice','renderStructurePanel',
-  'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','setChatBusy','setConsole','setFinalView','setKeyStatus',
+  'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','renderAnswerReuse','setChatBusy','setConsole','setFinalView','setKeyStatus',
   'setStage','setStatus','showNotice','syncBulletToggle','ttRenderLangBadge',
   'ttShareNote','updateLangButtons'];
 
