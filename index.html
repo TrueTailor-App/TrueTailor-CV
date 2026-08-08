@@ -23,6 +23,15 @@
      ===================================================================== -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFGMzg2NCIvPjxyZWN0IHg9IjYuNSIgeT0iNCIgd2lkdGg9IjE5IiBoZWlnaHQ9IjI0IiByeD0iMiIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjkuNSIgeT0iOCIgd2lkdGg9IjEzIiBoZWlnaHQ9IjMuNCIgcng9IjEuMiIgZmlsbD0iIzFGMzg2NCIvPjxyZWN0IHg9IjkuNSIgeT0iMTQuNCIgd2lkdGg9IjEzIiBoZWlnaHQ9IjIuNCIgcng9IjEuMiIgZmlsbD0iIzkzQTNCRSIvPjxyZWN0IHg9IjkuNSIgeT0iMTkiIHdpZHRoPSIxMyIgaGVpZ2h0PSIyLjQiIHJ4PSIxLjIiIGZpbGw9IiM5M0EzQkUiLz48cmVjdCB4PSI5LjUiIHk9IjIzLjYiIHdpZHRoPSI3LjUiIGhlaWdodD0iMi40IiByeD0iMS4yIiBmaWxsPSIjOTNBM0JFIi8+PC9zdmc+">
 <link rel="icon" type="image/png" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0BAMAAADP4xsBAAAAGFBMVEX////W3Oa6w9KTo76PnLKBj6hIXYEfOGTCboFAAAABg0lEQVR42u3YPU4CQRjG8RnQfiCxR0ysjSeRmHgC7+AdLDyC8QRqb8EVttUY3V5kp5YsY2/Mvu+8ZGE3/J+SwC/LMB/P4G9cWxk4aGhoaGho6C3RB/+/nD4rNTEahwz66z7r+U5n6gHJlN3bk5p+zB3Wdy39E3Pp9YOSnufPhoWOTkU+XUcVXVsmcaGi1xa6VNGVha52vYdEi5PYVKGhKQt/M7w8bvzw8qU0PrW/bpbd+CoY6cMgfWd/YaRn8ngeGenJZrNgsOHkmXSN9ho6sND3l1bVysJEJw0dbbSioSUb7Z5lemX8GRcyPTfS9Z0kvxbWA2x1Kxxg0Xw2uvTBaoSGhobuwV3GT4OwnUfrUwuy81PrgAzlu8xZ5y4cLsi0t9HcCrZHt9lUNbRxQBT/21ZGel1KcuM7Gren72Uwj7TYVCvmNTQ0dAfbkz+X2tNJaKGjKFrQbtqTb689qWJrT769eZ16uRppT7QnThlo6L5UHOdG2Ts4IYQQQgghhBBCSMfzC/wbYXpi5gnzAAAAAElFTkSuQmCC">
+<!-- Installable. The manifest and the worker have to be real files next to
+     this one: a manifest cannot be inlined and a service worker cannot be, so
+     manifest.webmanifest, sw.js and the three icons ship alongside index.html.
+     Without them the page still works exactly as before; it simply is not
+     installable, and the registration below fails quietly. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3C4A3E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TrueTailor">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0BAMAAADP4xsBAAAAGFBMVEX////W3Oa6w9KTo76PnLKBj6hIXYEfOGTCboFAAAABg0lEQVR42u3YPU4CQRjG8RnQfiCxR0ysjSeRmHgC7+AdLDyC8QRqb8EVttUY3V5kp5YsY2/Mvu+8ZGE3/J+SwC/LMB/P4G9cWxk4aGhoaGho6C3RB/+/nD4rNTEahwz66z7r+U5n6gHJlN3bk5p+zB3Wdy39E3Pp9YOSnufPhoWOTkU+XUcVXVsmcaGi1xa6VNGVha52vYdEi5PYVKGhKQt/M7w8bvzw8qU0PrW/bpbd+CoY6cMgfWd/YaRn8ngeGenJZrNgsOHkmXSN9ho6sND3l1bVysJEJw0dbbSioSUb7Z5lemX8GRcyPTfS9Z0kvxbWA2x1Kxxg0Xw2uvTBaoSGhobuwV3GT4OwnUfrUwuy81PrgAzlu8xZ5y4cLsi0t9HcCrZHt9lUNbRxQBT/21ZGel1KcuM7Gren72Uwj7TYVCvmNTQ0dAfbkz+X2tNJaKGjKFrQbtqTb689qWJrT769eZ16uRppT7QnThlo6L5UHOdG2Ts4IYQQQgghhBBCSMfzC/wbYXpi5gnzAAAAAElFTkSuQmCC">
 <meta name="theme-color" content="#1F3864">
 
@@ -1471,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.14</span>
+        <span class="tt-ver" id="verBadge">v38.15</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -1626,7 +1635,7 @@
   <section id="settingsCard" class="tt-card mb-4">
     <h2 class="tt-card-title mb-3">מפתח API של Google Gemini</h2>
     <div class="flex flex-wrap gap-2 items-center">
-      <input id="apiKeyInput" type="password" placeholder="הדבק כאן את המפתח" dir="ltr"
+      <input id="apiKeyInput" type="password" placeholder="הדבק כאן את המפתח" aria-label="מפתח Google Gemini API" dir="ltr"
              class="tt-field flex-1 min-w-[240px] font-mono" style="padding:9px 12px">
       <button id="btnSaveKey" class="tt-btn tt-btn-dark">שמור</button>
       <button id="btnTestKey" class="tt-btn tt-btn-primary">בדוק חיבור</button>
@@ -1719,7 +1728,7 @@
         <h2 class="tt-card-title"><span class="tt-tag">מקור</span>קורות החיים שלך</h2>
         <span id="resumeLangBadge" class="text-xs text-slate-500"></span>
       </div>
-      <textarea id="resumeInput" rows="14" placeholder="הדבק כאן את קורות החיים המלאים"
+      <textarea id="resumeInput" rows="14" aria-label="קורות החיים שלך" placeholder="הדבק כאן את קורות החיים המלאים"
                 class="tt-field tt-line"></textarea>
       <div class="flex flex-wrap gap-2 mt-2 text-sm">
         <!-- The text sits in its own span. The catalogue writes innerHTML, and
@@ -1750,7 +1759,7 @@
         <span id="jobLangBadge" class="text-xs text-slate-500"></span>
       </div>
 
-      <textarea id="jobInput" rows="14" placeholder="הדבק כאן את תיאור המשרה"
+      <textarea id="jobInput" rows="14" aria-label="תיאור המשרה" placeholder="הדבק כאן את תיאור המשרה"
                 class="tt-field tt-line"></textarea>
       <div class="flex flex-wrap gap-2 mt-2 text-sm">
         <label class="tt-drop">
@@ -1802,7 +1811,7 @@
         עם נתון אמיתי מכל תפקיד רלוונטי (אחוזים, סכומים, כמויות, זמני תגובה). שווה להוסיף מספרים אמיתיים שאתה זוכר,
         לפני או אחרי ההתאמה. זו הערה חד פעמית, היא לא חוסמת כלום.
       </div>
-      <button id="btnMetricsClose" class="text-sky-700 hover:text-sky-900">✕</button>
+      <button id="btnMetricsClose" class="text-sky-700 hover:text-sky-900" aria-label="סגור">✕</button>
     </div>
   </div>
 
@@ -1898,7 +1907,7 @@
       <!-- the layer holds the squiggles, the textarea holds the text; see .tt-spelllayer -->
       <div id="answerWrap" class="tt-spellwrap">
         <div id="answerSpellLayer" class="tt-spelllayer" aria-hidden="true"></div>
-        <textarea id="chatAnswer" rows="3" class="tt-field tt-line"></textarea>
+        <textarea id="chatAnswer" rows="3" aria-label="התשובה שלך" class="tt-field tt-line"></textarea>
       </div>
       <div id="answerSpellOut" class="text-xs"></div>
       <div class="flex flex-wrap gap-2">
@@ -2097,7 +2106,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.14';
+var TT_VERSION = 'v38.15';
 
 var APP = {
   apiKey: '',
@@ -8298,6 +8307,7 @@ function renderCvVault() {
         '<span class="font-semibold">' + escapeHtml(sl.label || '') + '</span>' +
         '<span class="text-slate-400">' + escapeHtml(when + (sl.file ? ' · ' + H('כולל הקובץ המקורי') : '')) + '</span>' +
         '<button type="button" class="tt-btn tt-btn-sm tt-btn-danger tt-cv-del" style="margin-inline-start:auto" ' +
+          'aria-label="' + escapeHtml(H('מחק את קורות החיים השמורים')) + '" ' +
           'data-cv="' + escapeHtml(sl.id) + '">🗑️</button>' +
         '</li>';
     });
@@ -14641,6 +14651,23 @@ function resetRun() {
   setStatus('');
 }
 
+/* Registered after load so it never competes with the first paint, and only
+   where it can work: opening this file from disk has no origin to scope a
+   worker to, and asking for one there throws. */
+if (typeof navigator !== 'undefined' && navigator.serviceWorker &&
+    location.protocol === 'https:') {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      /* A worker already controlling the page is one deploy behind by
+         definition. Asking it to check on every load is what keeps the gap to a
+         single page load rather than a day. */
+      if (reg && reg.update) { try { reg.update(); } catch (e) {} }
+    })['catch'](function () {
+      /* No worker, no offline copy, and nothing else changes. */
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   /* First, before anything paints. A renderer that runs before it is wrapped is
      never recorded and therefore never repainted on a language change:
@@ -16047,6 +16074,29 @@ var TT_I18N = (function () {
   /* Attributes are read by screen readers and by anyone who hovers, and they
      were never in the catalogue at all, so they stayed Hebrew in all eleven
      other languages. */
+  /* An aria-label is read out loud and is therefore interface text like any
+     other: left untranslated it would announce Hebrew to a screen reader set to
+     German. These go through the same catalogue as everything visible. */
+  put('aria.api_key', '#apiKeyInput',
+    ['מפתח Google Gemini API', 'مفتاح Google Gemini API', 'Google Gemini API key',
+     'Clé API Google Gemini', 'Clave de API de Google Gemini', 'Google-Gemini-API-Schlüssel',
+     'Chiave API di Google Gemini', 'Chave de API do Google Gemini', 'Google Gemini API ključ',
+     'Ключ API Google Gemini', 'Google Gemini API キー', 'Google Gemini API कुंजी'], 'aria-label');
+  put('aria.resume_box', '#resumeInput',
+    ['קורות החיים שלך', 'سيرتك الذاتية', 'Your resume', 'Votre CV', 'Tu currículum',
+     'Ihr Lebenslauf', 'Il tuo CV', 'O seu currículo', 'Vaš životopis', 'Ваше резюме',
+     'あなたの履歴書', 'आपका बायोडाटा'], 'aria-label');
+  put('aria.job_box', '#jobInput',
+    ['תיאור המשרה', 'وصف الوظيفة', 'The job posting', 'L\'annonce du poste',
+     'La oferta de empleo', 'Die Stellenanzeige', 'L\'annuncio di lavoro', 'A vaga',
+     'Oglas za posao', 'Описание вакансии', '求人票', 'नौकरी का विवरण'], 'aria-label');
+  put('aria.answer_box', '#chatAnswer',
+    ['התשובה שלך', 'إجابتك', 'Your answer', 'Votre réponse', 'Tu respuesta', 'Ihre Antwort',
+     'La tua risposta', 'A sua resposta', 'Vaš odgovor', 'Ваш ответ', 'あなたの回答',
+     'आपका उत्तर'], 'aria-label');
+  put('aria.metrics_close', '#btnMetricsClose',
+    ['סגור', 'إغلاق', 'Close', 'Fermer', 'Cerrar', 'Schließen', 'Chiudi', 'Fechar',
+     'Zatvori', 'Закрыть', '閉じる', 'बंद करें'], 'aria-label');
   put('title.start_over', '#btnStartOver',
     ['מנקה הכל ומתחיל מחדש, המפתח נשמר',
      'يمسح كل شيء ويبدأ من جديد، مع الاحتفاظ بالمفتاح',
@@ -16951,6 +17001,7 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'מחק את קורות החיים השמורים':['احذف السيرة الذاتية المحفوظة','Delete this saved resume','Supprimer ce CV enregistré','Eliminar este currículum guardado','Diesen gespeicherten Lebenslauf löschen','Elimina questo CV salvato','Excluir este currículo salvo','Izbriši ovaj spremljeni životopis','Удалить это сохранённое резюме','保存済みのこの履歴書を削除','यह सहेजा गया बायोडाटा हटाएँ'],
 'המשך להתאמה ⟵':['تابع إلى الملاءمة ⟵','Continue to the tailoring ⟶','Continuer vers l’adaptation ⟶','Continuar a la adaptación ⟶','Weiter zur Anpassung ⟶','Continua verso l’adattamento ⟶','Continuar para a adaptação ⟶','Nastavi na prilagodbu ⟶','Перейти к адаптации ⟶','調整へ進む ⟶','अनुकूलन पर जाएँ ⟶'],
 'עצור כאן':['توقّف هنا','Stop here','Arrêter ici','Detenerse aquí','Hier aufhören','Fermati qui','Parar aqui','Stani ovdje','Остановиться здесь','ここで終了','यहीं रोकें'],
 'ההתאמה המלאה שולחת עוד כ־15 בקשות למפתח שלך ולוקחת כמה דקות.':['الملاءمة الكاملة ترسل نحو 15 طلبًا إضافيًا عبر مفتاحك وتستغرق بضع دقائق.','The full tailoring sends about 15 more requests on your key and takes a few minutes.','L’adaptation complète envoie environ 15 requêtes de plus avec votre clé et prend quelques minutes.','La adaptación completa envía unas 15 solicitudes más con tu clave y tarda unos minutos.','Die vollständige Anpassung sendet rund 15 weitere Anfragen über Ihren Schlüssel und dauert einige Minuten.','L’adattamento completo invia circa 15 richieste in più con la tua chiave e richiede qualche minuto.','A adaptação completa envia cerca de 15 solicitações a mais com a sua chave e leva alguns minutos.','Potpuna prilagodba šalje još otprilike 15 zahtjeva preko vašeg ključa i traje nekoliko minuta.','Полная адаптация отправит ещё около 15 запросов по вашему ключу и займёт несколько минут.','完全な調整では、あなたのキーで約 15 件の追加リクエストを送信し、数分かかります。','पूर्ण अनुकूलन आपकी कुंजी से लगभग 15 और अनुरोध भेजता है और कुछ मिनट लेता है।'],
