@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.19</span>
+        <span class="tt-ver" id="verBadge">v38.20</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2109,7 +2109,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.19';
+var TT_VERSION = 'v38.20';
 
 var APP = {
   apiKey: '',
@@ -8861,6 +8861,88 @@ function ttVerdictFacts(v) {
 /* Quiet, and last in the row. It is not a headline, but somebody comparing two
    runs that disagree has no other way to find out whether they were even read
    by the same thing. */
+/* =========================================================================
+   WHAT THE MEASUREMENT DEPENDED ON
+
+   Three runs of one unchanged pairing produced 49, 40, 36. Steadily down, which
+   is a different shape from the 73, 73, 54 seen before, and neither shape can be
+   explained from three numbers alone. Every explanation on the table needs the
+   same four facts to be told apart: which model read the posting, which model
+   read the resume, whether the cascade dropped, and whether the input really was
+   identical between the runs.
+
+   All four exist in memory already and none of them were reachable. Asking
+   somebody to open the network panel and read a URL is asking them to do the
+   instrument's job. One button, one line of text, paste it anywhere.
+
+   The input signature is the part that matters most and is the easiest to
+   overlook: a comparison between two runs means nothing unless the two runs read
+   the same bytes. A single trailing space makes it a different document. The
+   hash is not a security device, it is an equality check, and any two runs that
+   show the same signature were unquestionably given the same text.
+   ========================================================================= */
+function ttInputSignature() {
+  /* FNV-1a, thirty two bit. Small, dependency free, and identical inputs always
+     produce identical output, which is all that is being asked of it. */
+  var text = String(APP.resumeRaw || '') + '\u0000' + String(APP.jobRaw || '');
+  var h = 0x811c9dc5;
+  for (var i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return ('0000000' + h.toString(16)).slice(-8) + '/' + text.length;
+}
+
+function ttMeasurementReport() {
+  var v = APP.verdictBefore || null;
+  var m = APP.runModels || {};
+  var parts = [
+    'TrueTailor ' + TT_VERSION,
+    'score=' + (v ? v.score : '-'),
+    'level=' + (v ? v.level : '-'),
+    'musts=' + (v ? v.mustsProved + '/' + v.musts : '-'),
+    'direct=' + (v ? v.direct : '-'),
+    'kw=' + (v && v.kwOverlap != null ? Math.round(v.kwOverlap * 100) + '%' : '-'),
+    'stage1=' + (m.signals || '-'),
+    'stage2=' + (m.coverage || '-'),
+    'preferred=' + (m.preferred || '-'),
+    'fellBack=' + (m.fellBack ? 'yes' : 'no'),
+    'input=' + ttInputSignature()
+  ];
+  return parts.join(' | ');
+}
+
+function ttCopyMeasurement() {
+  var line = ttMeasurementReport();
+  var done = function () { setStatus(H('פרטי המדידה הועתקו. אפשר להדביק אותם.')); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(line).then(done, function () { ttCopyFallback(line, done); });
+      return;
+    }
+  } catch (e) {}
+  ttCopyFallback(line, done);
+}
+
+function ttCopyFallback(line, done) {
+  /* The clipboard API needs a secure context and a permission the browser may
+     refuse. Selecting a textarea works everywhere and has since 2010. */
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = line;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done();
+  } catch (e) {
+    /* Even that failed. Show it so it can be copied by hand rather than lost. */
+    showNotice(line);
+  }
+}
+
 function ttMeasuredBy() {
   var m = APP.runModels;
   if (!m || (!m.signals && !m.coverage)) return '';
@@ -8868,7 +8950,9 @@ function ttMeasuredBy() {
   if (m.coverage) names.push(m.coverage);
   if (m.signals && m.signals !== m.coverage) names.push(m.signals);
   if (!names.length) return '';
-  return '<span style="opacity:.75">' + escapeHtml(H('נמדד על ידי ') + names.join(' · ')) + '</span>';
+  return '<span style="opacity:.75">' + escapeHtml(H('נמדד על ידי ') + names.join(' · ')) + '</span>' +
+    '<button type="button" id="btnCopyMeasure" class="tt-btn tt-btn-sm" style="padding:2px 9px;font-size:.7rem">' +
+      escapeHtml(H('העתק פרטי מדידה')) + '</button>';
 }
 
 /* The one case where the model is not a footnote. A score produced by a backup
@@ -9006,6 +9090,8 @@ function renderMatchVerdict() {
     ttMeasurementWarning() +
     ttVerdictDetail(v) +
     ttVerdictAdvice(v));
+  var cp = $('btnCopyMeasure');
+  if (cp) cp.addEventListener('click', ttCopyMeasurement);
 }
 
 
@@ -17380,6 +17466,8 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'העתק פרטי מדידה':['انسخ تفاصيل القياس','Copy measurement details','Copier les détails de la mesure','Copiar detalles de la medición','Messdetails kopieren','Copia i dettagli della misurazione','Copiar detalhes da medição','Kopiraj detalje mjerenja','Скопировать детали измерения','測定の詳細をコピー','माप विवरण कॉपी करें'],
+'פרטי המדידה הועתקו. אפשר להדביק אותם.':['نُسخت تفاصيل القياس. يمكنك لصقها.','The measurement details were copied. You can paste them.','Les détails de la mesure ont été copiés. Vous pouvez les coller.','Se copiaron los detalles de la medición. Puedes pegarlos.','Die Messdetails wurden kopiert. Sie können sie einfügen.','I dettagli della misurazione sono stati copiati. Puoi incollarli.','Os detalhes da medição foram copiados. Você pode colá-los.','Detalji mjerenja su kopirani. Možete ih zalijepiti.','Детали измерения скопированы. Их можно вставить.','測定の詳細をコピーしました。貼り付けできます。','माप विवरण कॉपी हो गया। आप उसे चिपका सकते हैं।'],
 'שים לב למספר הזה':['انتبه إلى هذا الرقم','Treat this number with care','Attention à ce chiffre','Cuidado con este número','Vorsicht bei dieser Zahl','Attenzione a questo numero','Atenção a este número','Oprez s ovim brojem','Осторожно с этим числом','この数値にはご注意ください','इस अंक को सावधानी से देखें'],
 'המדידה נעשתה על ידי מודל גיבוי, כי המכסה של המודל הראשי נגמרה.':['أُجري القياس بنموذج احتياطي، لأن حصة النموذج الأساسي نفدت.','The measurement was made by a backup model, because the main model was out of quota.','La mesure a été faite par un modèle de secours, le quota du modèle principal étant épuisé.','La medición la hizo un modelo de respaldo, porque el modelo principal se quedó sin cuota.','Die Messung stammt von einem Ersatzmodell, weil das Hauptmodell sein Kontingent aufgebraucht hatte.','La misurazione è stata fatta da un modello di riserva, perché il modello principale ha esaurito la quota.','A medição foi feita por um modelo reserva, porque o modelo principal ficou sem cota.','Mjerenje je obavio pričuvni model jer je glavnom modelu ponestalo kvote.','Измерение выполнила резервная модель, так как у основной закончилась квота.','主モデルの利用枠が尽きたため、予備モデルが測定しました。','मुख्य मॉडल की सीमा समाप्त होने के कारण माप बैकअप मॉडल ने किया।'],
 'שני חלקי המדידה נקראו על ידי מודלים שונים, כי המכסה של הראשון נגמרה באמצע.':['قرأ جزأي القياس نموذجان مختلفان، لأن حصة الأول نفدت في الأثناء.','The two halves of the measurement were read by different models, because the first ran out of quota midway.','Les deux moitiés de la mesure ont été lues par des modèles différents, le premier ayant épuisé son quota en cours de route.','Las dos mitades de la medición las leyeron modelos distintos, porque al primero se le agotó la cuota a mitad.','Die beiden Hälften der Messung wurden von verschiedenen Modellen gelesen, weil dem ersten mittendrin das Kontingent ausging.','Le due metà della misurazione sono state lette da modelli diversi, perché al primo è finita la quota a metà strada.','As duas metades da medição foram lidas por modelos diferentes, porque o primeiro ficou sem cota no meio.','Dvije polovice mjerenja pročitala su različita modela, jer je prvome usred posla ponestalo kvote.','Две половины измерения прочитали разные модели: у первой посреди работы закончилась квота.','測定の前半と後半を別々のモデルが読みました。前半のモデルの利用枠が途中で尽きたためです。','माप के दोनों हिस्से अलग-अलग मॉडलों ने पढ़े, क्योंकि पहले की सीमा बीच में समाप्त हो गई।'],
