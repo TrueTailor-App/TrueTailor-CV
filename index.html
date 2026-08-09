@@ -1480,7 +1480,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.20</span>
+        <span class="tt-ver" id="verBadge">v38.21</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -1818,14 +1818,14 @@
   <!-- STEP 1 + 2 -->
   <section id="analysisCard" class="tt-hidden tt-card mb-4">
     <h2 class="tt-card-title mb-3"><span class="tt-tag">שלב 1 ו־2</span>פירוק המשרה והשוואה דרישה מול דרישה</h2>
-    <!-- The verdict, before the detail. A candidate reading a requirement by
-         requirement table has to hold twenty rows in their head before they can
-         answer the only question they came with, which is whether this is worth
-         applying to at all. That answer exists the moment stage 2 finishes and
-         it belongs at the top, in a colour that can be read from across the
-         room. Filled by renderMatchVerdict(). -->
+    <!-- The verdict comes AFTER the two columns now, and the reason is the same
+         reason it used to come before them: what a number does to the reading
+         that follows it. A score at the top is read first and everything under
+         it is then read as evidence for a verdict already given, which is the
+         wrong way round. The requirement by requirement comparison is the thing
+         that was actually measured; the score is a summary of it. Read the
+         comparison, then see what it adds up to. Filled by renderMatchVerdict(). -->
     <div id="analysisLangBar" class="tt-hidden mb-3"></div>
-    <div id="matchVerdict" class="mb-4"></div>
     <div class="grid md:grid-cols-2 gap-4">
       <div class="md:order-1">
         <h3 id="analysisJobHead" class="text-sm font-semibold text-slate-600 mb-2">מה המשרה מבקשת</h3>
@@ -1836,6 +1836,7 @@
         <div id="gapsOut" class="text-sm space-y-2 tt-scroll"></div>
       </div>
     </div>
+    <div id="matchVerdict" class="mt-4"></div>
     <!-- The decision that used to be taken for the candidate. Filled by
          renderFitGate() and empty until stage 2 has finished. -->
     <div id="fitGate"></div>
@@ -2109,7 +2110,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.20';
+var TT_VERSION = 'v38.21';
 
 var APP = {
   apiKey: '',
@@ -4252,6 +4253,72 @@ async function callGeminiRaw(contents, opts) {
     throw new Error(lastProblem);                  // a real error, stop here
   }
   throw new Error(lastProblem + H(' נוסו כל המודלים הזמינים.'));
+}
+
+/* =========================================================================
+   THE MEASUREMENT RUNS ON ONE MODEL OR IT DOES NOT RUN
+
+   Three runs of one unchanged pairing, signature a2d2ce0b/6926 on all three:
+
+     score 53   musts 1/12   stage1 3.6-flash   stage2 3.5-flash-lite
+     score 34   musts 1/15   stage1 3.5-lite    stage2 3.5-flash-lite
+     score 64   musts 5/13   stage1 3.6-flash   stage2 3.5-flash-lite
+
+   Two things in that table. The measurement never once ran on the model it was
+   supposed to run on: stage 2 is the heaviest prompt in the file and it lost the
+   preferred model to quota every single time, silently, because falling back is
+   what the cascade is for. And the count of must have requirements moved between
+   twelve, fifteen and thirteen for one unchanged posting, which moves the
+   denominator, the gate and the ceiling under everything downstream.
+
+   Falling back is right for writing. A weaker model writes a weaker sentence and
+   the candidate can see it and reject it. It is wrong for measuring: a weaker
+   model returns a different number, the number looks exactly like the right one,
+   and nobody can tell. So the two measuring stages ask for the preferred model
+   and nothing else. One retry after a pause, because quota windows are short and
+   a six second wait is cheaper than a wrong score. Then it stops and says so.
+
+   Refusing to answer is a worse experience and a better product. The writing
+   stages are untouched and still use the whole cascade. */
+var TT_MEASURE_FLAG = 'tt_measure_unavailable';
+
+function ttPreferredModel() {
+  try { return (getModelCascade() || [])[0] || ''; } catch (e) { return ''; }
+}
+
+function ttMeasureUnavailable() {
+  var e = new Error(H('המדידה לא בוצעה, כי המודל הראשי לא היה זמין. זו כמעט תמיד מכסה שנגמרה: המתן דקה והתחל את ההתאמה שוב. מדידה על מודל גיבוי הייתה נותנת מספר אחר, שאי אפשר להשוות אותו לריצות אחרות.'));
+  e[TT_MEASURE_FLAG] = true;
+  return e;
+}
+
+
+/* One call, one model, one retry. Anything else that goes wrong is passed
+   through untouched: a truncated answer or a broken key is not a quota problem
+   and must not be reported as one. */
+async function ttMeasureCall(prompt, opts) {
+  var model = ttPreferredModel();
+  if (!model) throw ttMeasureUnavailable();
+  var conf = {};
+  Object.keys(opts || {}).forEach(function (k) { conf[k] = opts[k]; });
+  conf.models = [model];
+  try {
+    return await callGemini(prompt, conf);
+  } catch (e) {
+    var msg = String((e && e.message) || '');
+    /* The cascade reports an availability failure by exhausting the list it was
+       given, which for a list of one is this sentence. */
+    var availability = msg.indexOf(H(' נוסו כל המודלים הזמינים.')) >= 0;
+    if (!availability) throw e;
+    await new Promise(function (r) { setTimeout(r, 6000); });
+    try {
+      return await callGemini(prompt, conf);
+    } catch (e2) {
+      var msg2 = String((e2 && e2.message) || '');
+      if (msg2.indexOf(H(' נוסו כל המודלים הזמינים.')) >= 0) throw ttMeasureUnavailable();
+      throw e2;
+    }
+  }
 }
 
 /* Convenience wrappers. Tests stub these on window. */
@@ -6454,7 +6521,7 @@ function normalizeSignals(obj) {
 var TT_TOKENS = { signals: 16000, coverage: 24000, synthesis: 16000, skills: 16000, spell: 4000, qtranslate: 4000, answerSpell: 1500, question: 4000 };
 
 async function stepExtractSignals(jobText) {
-  var raw = await callGemini(promptSignals(jobText, currentDocLang()), {
+  var raw = await ttMeasureCall(promptSignals(jobText, currentDocLang()), {
     /* ---------- ZERO, AND WHY IT MATTERS HERE AND NOT ELSEWHERE ----------
        Measured on one real pairing, three runs, nothing changed between them:
        73, 73, 54. That is not a rounding difference, it is a different answer
@@ -7403,29 +7470,14 @@ async function stepCoverage() {
      53, 53, 41. Two identical results and then a drop, twice, always on the
      third. Sampling noise does not do that. A per project quota answering 429
      to a third run inside a few minutes does. */
-  var pinned = (APP.runModels && APP.runModels.signals) ? [APP.runModels.signals] : null;
-  var raw;
-  try {
-    raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
-      models: pinned,
+  var raw = await ttMeasureCall(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
     /* Same reason as stage 1, and this is the one that moves the score: the run
        that came back 54 had proved 5 of 11 must haves where the two that came
        back 73 had proved eight or nine of the same eleven. The requirement list
        held; three rows were simply read differently. */
     json: true, temperature: 0, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
-      failOnTruncation: true
-    });
-  } catch (e) {
-    if (!pinned) throw e;
-    /* The model that read the posting cannot read the resume. Better a
-       measurement taken with two instruments and labelled as such than no
-       measurement at all, so long as it is labelled. */
-    if (APP.runModels) APP.runModels.fellBack = true;
-    raw = await callGemini(promptCoverage(surgeonView(APP.doc), APP.signals, TT_UI_LANG, APP.resumeRaw), {
-      json: true, temperature: 0, maxOutputTokens: TT_TOKENS.coverage, timeoutMs: 110000,
-      failOnTruncation: true
-    });
-  }
+    failOnTruncation: true
+  });
   /* ---------- WHO MEASURED ----------
        The cascade drops to the next model on a 429, and a free tier answers 429
        to a third run inside a few minutes. So the same document can be read by
@@ -17466,6 +17518,7 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'המדידה לא בוצעה, כי המודל הראשי לא היה זמין. זו כמעט תמיד מכסה שנגמרה: המתן דקה והתחל את ההתאמה שוב. מדידה על מודל גיבוי הייתה נותנת מספר אחר, שאי אפשר להשוות אותו לריצות אחרות.':['لم يُجرَ القياس لأن النموذج الأساسي لم يكن متاحًا. هذا في الغالب نفاد الحصة: انتظر دقيقة وابدأ الملاءمة من جديد. القياس بنموذج احتياطي كان سيعطي رقمًا آخر لا يمكن مقارنته بتشغيلات أخرى.','The measurement did not run, because the main model was unavailable. That is nearly always an exhausted quota: wait a minute and start the tailoring again. Measuring on a backup model would have produced a different number that cannot be compared with other runs.','La mesure n’a pas été effectuée : le modèle principal n’était pas disponible. C’est presque toujours un quota épuisé. Attendez une minute et relancez l’adaptation. Mesurer avec un modèle de secours aurait donné un autre chiffre, incomparable avec les autres exécutions.','La medición no se realizó porque el modelo principal no estaba disponible. Casi siempre es una cuota agotada: espera un minuto y vuelve a empezar la adaptación. Medir con un modelo de respaldo habría dado otro número, no comparable con otras ejecuciones.','Die Messung wurde nicht durchgeführt, weil das Hauptmodell nicht verfügbar war. Fast immer ist das ein aufgebrauchtes Kontingent: Warten Sie eine Minute und starten Sie die Anpassung erneut. Eine Messung mit einem Ersatzmodell hätte eine andere Zahl ergeben, die mit anderen Läufen nicht vergleichbar ist.','La misurazione non è stata eseguita perché il modello principale non era disponibile. Quasi sempre è una quota esaurita: attendi un minuto e riavvia l’adattamento. Misurare con un modello di riserva avrebbe dato un numero diverso, non confrontabile con le altre esecuzioni.','A medição não foi feita porque o modelo principal não estava disponível. Quase sempre é cota esgotada: espere um minuto e inicie a adaptação de novo. Medir em um modelo reserva teria produzido outro número, não comparável com outras execuções.','Mjerenje nije provedeno jer glavni model nije bio dostupan. Gotovo uvijek je riječ o potrošenoj kvoti: pričekajte minutu i ponovno pokrenite prilagodbu. Mjerenje na pričuvnom modelu dalo bi drugi broj koji se ne može usporediti s drugim pokretanjima.','Измерение не выполнено: основная модель была недоступна. Почти всегда это исчерпанная квота — подождите минуту и запустите адаптацию снова. Измерение на резервной модели дало бы другое число, несопоставимое с другими запусками.','主モデルが利用できなかったため、測定は実行されませんでした。ほとんどの場合は利用枠の超過です。1 分ほど待ってから調整をやり直してください。予備モデルで測ると別の数値になり、他の実行と比較できません。','माप नहीं हुआ, क्योंकि मुख्य मॉडल उपलब्ध नहीं था। यह लगभग हमेशा सीमा समाप्त होने का मामला है: एक मिनट रुककर अनुकूलन फिर से शुरू करें। बैकअप मॉडल पर मापने से अलग अंक आता, जिसकी तुलना अन्य रन से नहीं की जा सकती।'],
 'העתק פרטי מדידה':['انسخ تفاصيل القياس','Copy measurement details','Copier les détails de la mesure','Copiar detalles de la medición','Messdetails kopieren','Copia i dettagli della misurazione','Copiar detalhes da medição','Kopiraj detalje mjerenja','Скопировать детали измерения','測定の詳細をコピー','माप विवरण कॉपी करें'],
 'פרטי המדידה הועתקו. אפשר להדביק אותם.':['نُسخت تفاصيل القياس. يمكنك لصقها.','The measurement details were copied. You can paste them.','Les détails de la mesure ont été copiés. Vous pouvez les coller.','Se copiaron los detalles de la medición. Puedes pegarlos.','Die Messdetails wurden kopiert. Sie können sie einfügen.','I dettagli della misurazione sono stati copiati. Puoi incollarli.','Os detalhes da medição foram copiados. Você pode colá-los.','Detalji mjerenja su kopirani. Možete ih zalijepiti.','Детали измерения скопированы. Их можно вставить.','測定の詳細をコピーしました。貼り付けできます。','माप विवरण कॉपी हो गया। आप उसे चिपका सकते हैं।'],
 'שים לב למספר הזה':['انتبه إلى هذا الرقم','Treat this number with care','Attention à ce chiffre','Cuidado con este número','Vorsicht bei dieser Zahl','Attenzione a questo numero','Atenção a este número','Oprez s ovim brojem','Осторожно с этим числом','この数値にはご注意ください','इस अंक को सावधानी से देखें'],
