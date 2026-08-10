@@ -266,6 +266,54 @@
     text-underline-offset:3px;
   }
 
+  /* ---------- answering out loud ----------
+     The button sits in the ordinary button row rather than inside the
+     textarea. Floating it in the corner of the box would need padding on the
+     textarea, and .tt-spelllayer copies that padding at runtime to line its
+     underlines up with the words: the mark would have moved under the word
+     before. Nothing here touches the box. */
+  .tt-voicebtn .tt-voicedot {
+    width:9px; height:9px; border-radius:50%; background:var(--c-mute);
+    display:inline-block; flex:none; transition:background .2s;
+  }
+  .tt-voicebtn.is-rec { border-color:#EFB6B1; color:var(--c-bad); background:var(--c-bad-w); }
+  .tt-voicebtn.is-rec .tt-voicedot { background:var(--c-bad); animation:ttvoicepulse 1.1s ease-in-out infinite; }
+  @keyframes ttvoicepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.72); } }
+
+  .tt-voicebar {
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    margin-top:7px; padding:8px 11px; border-radius:11px;
+    border:1px solid var(--c-line); background:var(--c-line-2);
+    font-size:.79rem; color:var(--c-ink-2);
+  }
+  .tt-voicebar.is-rec  { border-color:#EFB6B1; background:var(--c-bad-w); }
+  .tt-voicebar.is-ok   { border-color:#A7D9C1; background:var(--c-ok-w);   color:var(--c-ok); }
+  .tt-voicebar.is-warn { border-color:#EBCB9A; background:var(--c-warn-w); color:var(--c-warn); }
+  .tt-voicebar.is-bad  { border-color:#EFB6B1; background:var(--c-bad-w);  color:var(--c-bad); }
+  .tt-voicebar .tt-voicelive { display:inline-flex; align-items:center; gap:6px; font-weight:700; }
+  .tt-voicebar .tt-voicemsg  { flex:1 1 auto; min-width:0; }
+  .tt-voicepulse {
+    width:9px; height:9px; border-radius:50%; background:var(--c-bad); flex:none;
+    animation:ttvoicepulse 1.1s ease-in-out infinite;
+  }
+  /* Tabular figures so the seconds do not shuffle the row sideways as they
+     tick, and ASCII digits everywhere: a locale aware formatter would put
+     Devanagari numerals inside a clock the app also compares against 1:30. */
+  .tt-voiceclock { font-variant-numeric:tabular-nums; font-weight:700; }
+  .tt-voiceclock.is-warn { color:var(--c-bad); }
+  /* The meter is the only proof the microphone in use is the one the candidate
+     is speaking into. A bar that never moves is the answer to "why was my
+     recording empty", ninety seconds before the recording ends. */
+  .tt-voicemeter {
+    flex:0 1 84px; height:5px; border-radius:3px; overflow:hidden;
+    background:rgba(18,52,64,.14); min-width:44px;
+  }
+  .tt-voicemeter i { display:block; height:100%; background:var(--c-bad); transition:width .09s linear; }
+  @media (prefers-reduced-motion: reduce) {
+    .tt-voicebtn.is-rec .tt-voicedot, .tt-voicepulse { animation:none; }
+    .tt-voicemeter i { transition:none; }
+  }
+
   /* ---------- the preview page ----------
      One column of ordinary paragraphs. Everything that makes a template a
      template is typography, spacing, a rule and a heading colour, so nothing
@@ -1491,7 +1539,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v38.22</span>
+        <span class="tt-ver" id="verBadge">v39.0</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -1675,7 +1723,7 @@
   <div id="howKeyModal" class="tt-hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl max-w-lg w-full p-5">
       <h3 class="font-bold text-lg mb-2">איך משיגים מפתח API בחינם</h3>
-      <p class="text-sm text-slate-600 mb-3">אין דרך ליצור מפתח אוטומטית מתוך האפליקציה, גוגל לא מאפשרת זאת. הדרך היחידה היא דרך הדף הרשמי:</p>
+      <p id="howKeyBody" class="text-sm text-slate-600 mb-3">אין דרך ליצור מפתח אוטומטית מתוך האפליקציה, גוגל לא מאפשרת זאת. הדרך היחידה היא דרך הדף הרשמי:</p>
       <ol class="list-decimal me-5 space-y-1 text-sm text-slate-700">
         <li>לחץ על הכפתור "🔑 קבל מפתח API בחינם", נפתח טאב חדש ב־Google AI Studio.</li>
         <li>לחץ על <b>Create API key</b>.</li>
@@ -1926,12 +1974,24 @@
       </div>
       <div id="answerSpellOut" class="text-xs"></div>
       <div class="flex flex-wrap gap-2">
+        <!-- First in the row on purpose. Flex follows the writing direction, so
+             markup order puts this at the start of the line in Hebrew and
+             Arabic and at the start of the line in the other ten, with no rule
+             to keep in step. -->
+        <button id="btnVoiceRec" type="button" class="tt-btn tt-voicebtn"
+                aria-label="ענה על השאלה בהקלטה קולית" title="ענה על השאלה בהקלטה קולית">
+          <span class="tt-voicedot" aria-hidden="true"></span><span id="voiceBtnLabel">הקלט תשובה</span>
+        </button>
         <button id="btnSendAnswer" class="tt-btn tt-btn-primary">שלח תשובה</button>
         <button id="btnSkipQ" class="tt-btn">דלג על השאלה</button>
         <button id="btnDoneQ" class="tt-btn tt-btn-ok">סיימתי, בנה את הגרסה</button>
         <button id="btnRetryQ" class="tt-btn tt-hidden">↻ נסה שוב</button>
         <span id="chatCounter" class="text-xs self-center" style="color:var(--c-mute)"></span>
       </div>
+      <!-- Recording state, timing and every voice error live here and nowhere
+           else. Deliberately not #chatCounter: setChatBusy overwrites that on
+           every turn, so a message left there would vanish mid sentence. -->
+      <div id="voiceBar" class="tt-voicebar tt-hidden" role="status" aria-live="polite"></div>
     </div>
   </section>
 
@@ -2121,7 +2181,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v38.22';
+var TT_VERSION = 'v39.0';
 
 var APP = {
   apiKey: '',
@@ -4189,6 +4249,15 @@ function ttClearKeyProblem() {
   try { renderKeyProblem(); } catch (e) {}
 }
 
+/* A 400 that is about the key rather than about the request. Needed because
+   audio calls treat 400 as "this model cannot read audio, try the next one",
+   and a dead key answers 400 as well: without telling them apart, one bad key
+   would be reported as seven models refusing the recording. */
+function ttIsKeyError(json) {
+  var detail = (json && json.error && json.error.message) || '';
+  return /API key not valid|API_KEY_INVALID|API_KEY_SERVICE_BLOCKED/i.test(detail);
+}
+
 function apiErrorMessage(status, json) {
   var detail = (json && json.error && json.error.message) || '';
   if (status === 400 && /API key not valid|API_KEY_INVALID/i.test(detail)) {
@@ -4263,6 +4332,16 @@ async function callGeminiRaw(contents, opts) {
       return text;
     }
     lastProblem = apiErrorMessage(r.status, r.json);
+    /* Opt in, and only for the audio path. ListModels reports which models do
+       generateContent and says nothing about which of them accept an inline
+       audio part, so the only way to find out is to send one: a model that
+       cannot answers 400, which is otherwise fatal and rightly so. Excluded
+       when the 400 is about the key, because cascading past that would try
+       every model with the same dead key and then blame the last one. */
+    if (opts.cascadeOn400 && r.status === 400 && !ttIsKeyError(r.json)) {
+      if (opts.onUnsupported) { try { opts.onUnsupported(models[i]); } catch (e) {} }
+      continue;
+    }
     if (CASCADE_STATUS[r.status]) continue;        // availability problem, next model
     throw new Error(lastProblem);                  // a real error, stop here
   }
@@ -10131,6 +10210,11 @@ function setChatBusy(busy) {
   var c = $('chatCounter');
   if (c) c.textContent = busy ? H('מנסח את השאלה הבאה...') : '';
   renderChatProgress(busy);
+  /* Two things now decide whether send and skip are usable: the model writing
+     the next question, and a recording in progress. The state is recorded here
+     and the decision is taken in one place, otherwise whichever of the two
+     finished last would re-enable a button the other still wants disabled. */
+  try { TT_VOICE.chatBusy = !!busy; ttVoiceSync(); } catch (e) {}
 }
 
 /* "שאלה 4 מתוך 6", plus the same thing as a bar and as one pip per question,
@@ -12957,6 +13041,7 @@ function bindStageUi() {
   bindPreviewUi();
   bindIoUi();
   bindAnswerSpellUi();
+  bindVoiceUi();
   bindResultUi();
 }
 
@@ -15211,6 +15296,10 @@ function resetRun() {
                lastTurnMessage: '' };
   if (typeof showChatRetry === 'function') showChatRetry(false);
   if (typeof clearAnswerSpell === 'function') clearAnswerSpell();
+  /* Runs before every pipeline run and on start over. A live microphone or a
+     recording held for a retry that survived this would drop one posting's
+     answer into another posting's box. */
+  if (typeof ttVoiceReset === 'function') ttVoiceReset();
   ['analysisCard', 'chatCard', 'answersCard', 'reviewCard', 'previewCard', 'resultCard',
    'metricsNotice', 'noticeBox', 'noRelationCard', 'domainCard', 'interviewCard'].forEach(hide);
   /* Hiding a card is not the same as emptying it. A card that is hidden with
@@ -16631,6 +16720,32 @@ var TT_I18N = (function () {
     if (attr) ATTR[key] = attr;
   }
 
+  /* ---- answering out loud ------------------------------------------------ */
+  /* Twelve entries each, checked by TT_I18N.missing() at boot: an array of
+     eleven is a wrong length rather than a silent Hebrew string on a
+     Croatian screen. Entries with no selector are read with T() at the
+     moment they are shown, so a language change repaints them. */
+  put('btn.voice_rec', '#voiceBtnLabel', ['הקלט תשובה', 'سجّل إجابة', 'Record an answer', 'Enregistrer une réponse', 'Grabar una respuesta', 'Antwort aufnehmen', 'Registra una risposta', 'Gravar uma resposta', 'Snimi odgovor', 'Записать ответ', '音声で回答', 'उत्तर रिकॉर्ड करें']);
+  put('aria.voice_rec', '#btnVoiceRec', ['ענה על השאלה בהקלטה קולית', 'أجب عن السؤال بتسجيل صوتي', 'Answer the question with a voice recording', 'Répondre à la question par un enregistrement vocal', 'Responder a la pregunta con una grabación de voz', 'Die Frage per Sprachaufnahme beantworten', 'Rispondi alla domanda con una registrazione vocale', 'Responder à pergunta com uma gravação de voz', 'Odgovorite na pitanje glasovnim snimanjem', 'Ответить на вопрос голосовой записью', '音声録音で質問に答える', 'आवाज़ रिकॉर्डिंग से प्रश्न का उत्तर दें'], 'aria-label');
+  put('title.voice_rec', '#btnVoiceRec', ['ענה על השאלה בהקלטה קולית', 'أجب عن السؤال بتسجيل صوتي', 'Answer the question with a voice recording', 'Répondre à la question par un enregistrement vocal', 'Responder a la pregunta con una grabación de voz', 'Die Frage per Sprachaufnahme beantworten', 'Rispondi alla domanda con una registrazione vocale', 'Responder à pergunta com uma gravação de voz', 'Odgovorite na pitanje glasovnim snimanjem', 'Ответить на вопрос голосовой записью', '音声録音で質問に答える', 'आवाज़ रिकॉर्डिंग से प्रश्न का उत्तर दें'], 'title');
+  put('voice.recording', null, ['מקליט', 'يسجّل', 'Recording', 'Enregistrement', 'Grabando', 'Aufnahme läuft', 'Registrazione', 'Gravando', 'Snimanje', 'Идёт запись', '録音中', 'रिकॉर्ड हो रहा है']);
+  put('voice.stop', null, ['עצור ותמלל', 'أوقف وفرّغ', 'Stop and transcribe', 'Arrêter et transcrire', 'Detener y transcribir', 'Stoppen und transkribieren', 'Ferma e trascrivi', 'Parar e transcrever', 'Zaustavi i prepiši', 'Остановить и расшифровать', '停止して文字起こし', 'रोकें और लिखें']);
+  put('voice.cancel', null, ['בטל', 'إلغاء', 'Cancel', 'Annuler', 'Cancelar', 'Abbrechen', 'Annulla', 'Cancelar', 'Odustani', 'Отмена', 'キャンセル', 'रद्द करें']);
+  put('voice.processing', null, ['מתמלל את ההקלטה...', 'يفرّغ التسجيل...', 'Transcribing the recording...', 'Transcription de l\'enregistrement...', 'Transcribiendo la grabación...', 'Die Aufnahme wird transkribiert...', 'Trascrizione della registrazione...', 'Transcrevendo a gravação...', 'Prepisujem snimku...', 'Расшифровываю запись...', '録音を文字起こし中...', 'रिकॉर्डिंग लिखी जा रही है...']);
+  put('voice.retry', null, ['↻ נסה שוב עם אותה הקלטה', '↻ أعد المحاولة بالتسجيل نفسه', '↻ Try again with the same recording', '↻ Réessayer avec le même enregistrement', '↻ Reintentar con la misma grabación', '↻ Mit derselben Aufnahme erneut versuchen', '↻ Riprova con la stessa registrazione', '↻ Tentar de novo com a mesma gravação', '↻ Pokušaj ponovno s istom snimkom', '↻ Повторить с той же записью', '↻ 同じ録音でもう一度', '↻ उसी रिकॉर्डिंग से फिर कोशिश करें']);
+  put('voice.added', null, ['✓ התמלול נכנס לתיבה. אפשר לתקן אותו לפני השליחה.', '✓ أُدرج التفريغ في المربّع. يمكنك تصحيحه قبل الإرسال.', '✓ The transcript was added to the box. You can correct it before sending.', '✓ La transcription a été ajoutée dans le champ. Vous pouvez la corriger avant l\'envoi.', '✓ La transcripción se añadió al cuadro. Puedes corregirla antes de enviarla.', '✓ Die Transkription wurde in das Feld eingefügt. Sie können sie vor dem Senden korrigieren.', '✓ La trascrizione è stata inserita nel campo. Puoi correggerla prima di inviarla.', '✓ A transcrição foi adicionada ao campo. Você pode corrigi-la antes de enviar.', '✓ Prijepis je unesen u polje. Možete ga ispraviti prije slanja.', '✓ Расшифровка добавлена в поле. Её можно исправить перед отправкой.', '✓ 文字起こしを入力欄に追加しました。送信前に修正できます。', '✓ लेखन बॉक्स में जोड़ दिया गया। भेजने से पहले सुधार सकते हैं।']);
+  put('voice.limit', null, ['הגעת למגבלת 90 השניות, וההקלטה נשלחה לתמלול.', 'بلغتَ حدّ التسعين ثانية، وأُرسل التسجيل للتفريغ.', 'The 90 second limit was reached, and the recording was sent for transcription.', 'La limite de 90 secondes a été atteinte et l\'enregistrement a été envoyé pour transcription.', 'Se alcanzó el límite de 90 segundos y la grabación se envió a transcribir.', 'Das Limit von 90 Sekunden wurde erreicht und die Aufnahme wurde zur Transkription geschickt.', 'È stato raggiunto il limite di 90 secondi e la registrazione è stata inviata per la trascrizione.', 'O limite de 90 segundos foi atingido e a gravação foi enviada para transcrição.', 'Dosegnuto je ograničenje od 90 sekundi i snimka je poslana na prepisivanje.', 'Достигнут предел в 90 секунд, запись отправлена на расшифровку.', '90 秒の上限に達したため、録音を文字起こしに送りました。', '90 सेकंड की सीमा पूरी हुई, और रिकॉर्डिंग लिखने के लिए भेज दी गई।']);
+  put('voice.err_denied', null, ['לא ניתנה הרשאה למיקרופון. אפשר לאשר אותה בהגדרות האתר בדפדפן, או פשוט לכתוב את התשובה.', 'لم يُمنح إذن الميكروفون. يمكنك السماح به من إعدادات الموقع في المتصفّح، أو ببساطة كتابة الإجابة.', 'Microphone permission was not given. You can allow it in the browser\'s site settings, or simply type the answer.', 'L\'autorisation du microphone n\'a pas été accordée. Vous pouvez l\'autoriser dans les paramètres du site, ou simplement écrire la réponse.', 'No se concedió permiso para el micrófono. Puedes permitirlo en la configuración del sitio, o simplemente escribir la respuesta.', 'Die Mikrofonberechtigung wurde nicht erteilt. Sie können sie in den Website-Einstellungen erlauben oder die Antwort einfach eintippen.', 'Il permesso per il microfono non è stato concesso. Puoi autorizzarlo nelle impostazioni del sito, oppure scrivere la risposta.', 'A permissão do microfone não foi concedida. Você pode permiti-la nas configurações do site, ou simplesmente digitar a resposta.', 'Dopuštenje za mikrofon nije dano. Možete ga odobriti u postavkama stranice ili jednostavno upisati odgovor.', 'Разрешение на микрофон не получено. Его можно выдать в настройках сайта или просто напечатать ответ.', 'マイクの使用が許可されませんでした。ブラウザのサイト設定で許可するか、回答を入力してください。', 'माइक्रोफ़ोन की अनुमति नहीं मिली। आप इसे ब्राउज़र की साइट सेटिंग में दे सकते हैं, या उत्तर टाइप कर सकते हैं।']);
+  put('voice.err_nomic', null, ['לא נמצא מיקרופון מחובר.', 'لم يُعثر على ميكروفون متصل.', 'No connected microphone was found.', 'Aucun microphone connecté n\'a été trouvé.', 'No se encontró ningún micrófono conectado.', 'Es wurde kein angeschlossenes Mikrofon gefunden.', 'Nessun microfono collegato trovato.', 'Nenhum microfone conectado foi encontrado.', 'Nije pronađen priključen mikrofon.', 'Подключённый микрофон не найден.', '接続されたマイクが見つかりません。', 'कोई जुड़ा हुआ माइक्रोफ़ोन नहीं मिला।']);
+  put('voice.err_busy', null, ['המיקרופון תפוס על ידי תוכנה אחרת.', 'الميكروفون مشغول ببرنامج آخر.', 'The microphone is in use by another application.', 'Le microphone est utilisé par une autre application.', 'El micrófono está siendo usado por otra aplicación.', 'Das Mikrofon wird von einer anderen Anwendung verwendet.', 'Il microfono è in uso da un\'altra applicazione.', 'O microfone está sendo usado por outro aplicativo.', 'Mikrofon koristi druga aplikacija.', 'Микрофон занят другой программой.', 'マイクは他のアプリが使用中です。', 'माइक्रोफ़ोन किसी अन्य ऐप द्वारा उपयोग में है।']);
+  put('voice.err_short', null, ['ההקלטה קצרה מדי.', 'التسجيل قصير جدًا.', 'The recording is too short.', 'L\'enregistrement est trop court.', 'La grabación es demasiado corta.', 'Die Aufnahme ist zu kurz.', 'La registrazione è troppo breve.', 'A gravação é curta demais.', 'Snimka je prekratka.', 'Запись слишком короткая.', '録音が短すぎます。', 'रिकॉर्डिंग बहुत छोटी है।']);
+  put('voice.err_silent', null, ['לא נשמע קול בהקלטה. בדוק שנבחר המיקרופון הנכון ונסה שוב.', 'لم يُسمع أي صوت في التسجيل. تأكّد من اختيار الميكروفون الصحيح وحاول مجددًا.', 'No sound was heard in the recording. Check that the right microphone is selected and try again.', 'Aucun son n\'a été entendu dans l\'enregistrement. Vérifiez que le bon microphone est sélectionné et réessayez.', 'No se escuchó ningún sonido en la grabación. Comprueba que esté seleccionado el micrófono correcto e inténtalo de nuevo.', 'In der Aufnahme war kein Ton zu hören. Prüfen Sie, ob das richtige Mikrofon ausgewählt ist, und versuchen Sie es erneut.', 'Nessun suono rilevato nella registrazione. Verifica che sia selezionato il microfono giusto e riprova.', 'Nenhum som foi ouvido na gravação. Verifique se o microfone certo está selecionado e tente de novo.', 'U snimci se ne čuje zvuk. Provjerite je li odabran pravi mikrofon i pokušajte ponovno.', 'В записи не слышно звука. Проверьте, выбран ли нужный микрофон, и попробуйте снова.', '録音に音声がありませんでした。正しいマイクが選択されているか確認して、もう一度お試しください。', 'रिकॉर्डिंग में कोई आवाज़ नहीं सुनाई दी। जाँचें कि सही माइक्रोफ़ोन चुना गया है, फिर कोशिश करें।']);
+  put('voice.err_nospeech', null, ['לא זוהה דיבור בהקלטה.', 'لم يُكتشف كلام في التسجيل.', 'No speech was detected in the recording.', 'Aucune parole n\'a été détectée dans l\'enregistrement.', 'No se detectó habla en la grabación.', 'In der Aufnahme wurde keine Sprache erkannt.', 'Nessun parlato rilevato nella registrazione.', 'Nenhuma fala foi detectada na gravação.', 'U snimci nije prepoznat govor.', 'Речь в записи не распознана.', '録音から音声が認識されませんでした。', 'रिकॉर्डिंग में कोई बोली नहीं पहचानी गई।']);
+  put('voice.err_decode', null, ['לא הצלחתי לקרוא את ההקלטה בדפדפן הזה. אפשר לכתוב את התשובה.', 'تعذّر قراءة التسجيل في هذا المتصفّح. يمكنك كتابة الإجابة.', 'The recording could not be read in this browser. You can type the answer instead.', 'L\'enregistrement n\'a pas pu être lu dans ce navigateur. Vous pouvez écrire la réponse.', 'No se pudo leer la grabación en este navegador. Puedes escribir la respuesta.', 'Die Aufnahme konnte in diesem Browser nicht gelesen werden. Sie können die Antwort eintippen.', 'Non è stato possibile leggere la registrazione in questo browser. Puoi scrivere la risposta.', 'Não foi possível ler a gravação neste navegador. Você pode digitar a resposta.', 'Snimku nije bilo moguće pročitati u ovom pregledniku. Odgovor možete upisati.', 'Не удалось прочитать запись в этом браузере. Ответ можно напечатать.', 'このブラウザでは録音を読み取れませんでした。回答は入力できます。', 'इस ब्राउज़र में रिकॉर्डिंग पढ़ी नहीं जा सकी। आप उत्तर टाइप कर सकते हैं।']);
+  put('voice.err_nomodel', null, ['אף מודל זמין לא קיבל את ההקלטה. אפשר לכתוב את התשובה.', 'لم يقبل أي نموذج متاح التسجيل. يمكنك كتابة الإجابة.', 'No available model accepted the recording. You can type the answer instead.', 'Aucun modèle disponible n\'a accepté l\'enregistrement. Vous pouvez écrire la réponse.', 'Ningún modelo disponible aceptó la grabación. Puedes escribir la respuesta.', 'Kein verfügbares Modell hat die Aufnahme angenommen. Sie können die Antwort eintippen.', 'Nessun modello disponibile ha accettato la registrazione. Puoi scrivere la risposta.', 'Nenhum modelo disponível aceitou a gravação. Você pode digitar a resposta.', 'Nijedan dostupan model nije prihvatio snimku. Odgovor možete upisati.', 'Ни одна доступная модель не приняла запись. Ответ можно напечатать.', '利用できるモデルが録音を受け付けませんでした。回答は入力できます。', 'किसी उपलब्ध मॉडल ने रिकॉर्डिंग स्वीकार नहीं की। आप उत्तर टाइप कर सकते हैं।']);
+  put('voice.err_final', null, ['התמלול לא הצליח. אפשר להקליט שוב, או פשוט לכתוב את התשובה.', 'فشل التفريغ. يمكنك التسجيل مرة أخرى، أو ببساطة كتابة الإجابة.', 'The transcription failed. You can record again, or simply type the answer.', 'La transcription a échoué. Vous pouvez réenregistrer, ou simplement écrire la réponse.', 'La transcripción falló. Puedes grabar de nuevo, o simplemente escribir la respuesta.', 'Die Transkription ist fehlgeschlagen. Sie können erneut aufnehmen oder die Antwort einfach eintippen.', 'La trascrizione non è riuscita. Puoi registrare di nuovo, oppure scrivere la risposta.', 'A transcrição falhou. Você pode gravar de novo, ou simplesmente digitar a resposta.', 'Prepisivanje nije uspjelo. Možete snimiti ponovno ili jednostavno upisati odgovor.', 'Расшифровка не удалась. Можно записать заново или просто напечатать ответ.', '文字起こしに失敗しました。録音し直すか、回答を入力してください。', 'लेखन विफल रहा। आप फिर रिकॉर्ड कर सकते हैं, या उत्तर टाइप कर सकते हैं।']);
+  put('voice.err_nokey', null, ['צריך מפתח API כדי לתמלל. פתח את ההגדרות והזן מפתח.', 'يلزم مفتاح API للتفريغ. افتح الإعدادات وأدخل مفتاحًا.', 'An API key is needed to transcribe. Open the settings and enter a key.', 'Une clé API est nécessaire pour transcrire. Ouvrez les paramètres et saisissez une clé.', 'Se necesita una clave de API para transcribir. Abre la configuración e introduce una clave.', 'Zum Transkribieren wird ein API-Schlüssel benötigt. Öffnen Sie die Einstellungen und geben Sie einen Schlüssel ein.', 'Serve una chiave API per trascrivere. Apri le impostazioni e inserisci una chiave.', 'É preciso uma chave de API para transcrever. Abra as configurações e insira uma chave.', 'Za prepisivanje je potreban API ključ. Otvorite postavke i unesite ključ.', 'Для расшифровки нужен ключ API. Откройте настройки и введите ключ.', '文字起こしには API キーが必要です。設定を開いてキーを入力してください。', 'लिखने के लिए API कुंजी चाहिए। सेटिंग्स खोलकर कुंजी दर्ज करें।']);
+
   /* ---- brand and chrome -------------------------------------------------- */
   put('brand.sub', '.tt-brandsub', [
     'התאמת קורות חיים למשרה, בלי להמציא כלום',
@@ -16838,7 +16953,7 @@ var TT_I18N = (function () {
     ['איך עושים את זה?', 'كيف يتم ذلك؟', 'How is that done?', 'Comment faire ?', '¿Cómo se hace?', 'Wie geht das?', 'Come si fa?', 'Como se faz?', 'Kako se to radi?', 'Как это сделать?', 'やり方は？', 'यह कैसे करें?']);
   put('howkey.title', '#howKeyModal h3',
     ['איך משיגים מפתח API בחינם', 'كيف تحصل على مفتاح API مجاني', 'How to get a free API key', 'Comment obtenir une clé API gratuite', 'Cómo conseguir una clave API gratis', 'So erhalten Sie einen kostenlosen API-Schlüssel', 'Come ottenere una chiave API gratuita', 'Como obter uma chave de API gratuita', 'Kako doći do besplatnog API ključa', 'Как получить бесплатный ключ API', '無料の API キーを取得する方法', 'मुफ़्त API कुंजी कैसे लें']);
-  put('howkey.body', '#howKeyModal > div > p', [
+  put('howkey.body', '#howKeyBody', [
     'אין דרך ליצור מפתח אוטומטית מתוך האפליקציה, גוגל לא מאפשרת זאת. הדרך היחידה היא דרך הדף הרשמי:',
     'لا توجد طريقة لإنشاء مفتاح تلقائيًا من داخل التطبيق، فـ Google لا تتيح ذلك. الطريق الوحيد هو الصفحة الرسمية:',
     'There is no way to create a key from inside this app, Google does not allow it. The only route is the official page:',
@@ -18467,7 +18582,7 @@ var TT_PAINTERS = ['aboutNote','applyUiLang','bindStructurePanel','buildUiLangMe
   'renderReview','renderSignals','renderSpellNotice','renderStructurePanel',
   'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','renderAnswerReuse','setChatBusy','setConsole','setFinalView','setKeyStatus',
   'setStage','setStatus','showNotice','syncBulletToggle','ttRenderLangBadge',
-  'ttShareNote','updateLangButtons'];
+  'ttShareNote','updateLangButtons','renderVoice'];
 
 /* applyUiLang and buildUiLangMenu are in the list above only so that nothing
    has to remember to keep two lists in step; they are skipped when replaying,
@@ -19151,6 +19266,9 @@ function renderAbout() {
   h += '<li>' + (en
     ? 'There is no analytics and no tracking. Loading the page does fetch fonts and libraries from public CDNs, which means those servers see your IP address, as they would on any site.'
     : H('אין אנליטיקס ואין מעקב. טעינת הדף כן מושכת גופנים וספריות מ־CDN ציבורי, כלומר אותם שרתים רואים את כתובת ה־IP שלך, כמו בכל אתר.')) + '</li>';
+  h += '<li>' + (en
+    ? 'If you answer a gap question by voice, the recording is converted in your browser and sent to the same Google Gemini API, under the same terms, and is transcribed there. It is never stored: it lives in the memory of this page and is released as soon as the transcript comes back.'
+    : H('אם אתה עונה על שאלת התאמה בהקלטה קולית, ההקלטה מומרת בדפדפן שלך ונשלחת לאותו Google Gemini API, באותם תנאים, ושם היא מתומללת. היא לא נשמרת בשום מקום: היא חיה בזיכרון הדף בלבד ומשוחררת ברגע שהתמלול חוזר.')) + '</li>';
   h += '</ul></div>';
 
   h += '<div class="tt-about-sec"><h4>💡 ' + (en ? 'Using AI responsibly' : H('שימוש אחראי ב־AI')) + '</h4><p>' + (en
@@ -19172,7 +19290,13 @@ function renderAbout() {
          : H('הכלי ניתן כמו שהוא, בלי אחריות. הפלט הוא טיוטה ולא מסמך סופי, והאחריות על כל מה שנשלח למגייס נשארת שלך. השימוש ב־Google Gemini כפוף לתנאי השימוש של גוגל, במסלול שהמפתח שלך יושב עליו.')) + '</div>' +
        '<div id="boxPrivacy" class="tt-legalbox tt-about-note">' + (en
          ? 'No server, no collection. Your resume, the posting and your answers stay in the browser and in the memory of this page, and the API key stays in localStorage. The only thing that leaves your computer is the text sent to Google Gemini for the analysis. No analytics, no third party cookies, nothing shared with anyone else.'
-         : H('אין שרת ואין איסוף. קורות החיים, המשרה והתשובות שלך נשארים בדפדפן ובזיכרון הדף בלבד, ומפתח ה־API נשמר ב־localStorage. הדבר היחיד שיוצא מהמחשב שלך הוא הטקסט שנשלח ל־Google Gemini לצורך הניתוח. אין אנליטיקס, אין קוקיז של צד שלישי ואין שיתוף עם אף גורם אחר.')) + '</div>' +
+         : H('אין שרת ואין איסוף. קורות החיים, המשרה והתשובות שלך נשארים בדפדפן ובזיכרון הדף בלבד, ומפתח ה־API נשמר ב־localStorage. הדבר היחיד שיוצא מהמחשב שלך הוא הטקסט שנשלח ל־Google Gemini לצורך הניתוח. אין אנליטיקס, אין קוקיז של צד שלישי ואין שיתוף עם אף גורם אחר.')) +
+         /* Added as its own sentence rather than by editing the one above,
+            which already carries eleven translations that would all have had
+            to be rewritten to add a clause. */
+         ' ' + (en
+           ? 'The one addition to that: if you answer by voice, the recording itself is sent to Google Gemini to be transcribed, and is kept nowhere.'
+           : H('התוספת היחידה לכך: אם תענה בהקלטה קולית, גם ההקלטה עצמה נשלחת ל־Google Gemini לצורך התמלול, ואינה נשמרת בשום מקום.')) + '</div>' +
        '</div>';
 
   el.innerHTML = h;
@@ -20506,6 +20630,640 @@ function bindAnswerSpellUi() {
   });
   window.addEventListener('resize', function () { renderAnswerSpell(); });
 }
+
+/* =========================================================================
+   ANSWERING A GAP QUESTION OUT LOUD
+
+   Everything here produces one thing: text in the answer box, which the
+   candidate then reads, corrects and sends. Nothing is sent on their behalf
+   and nothing skips the box.
+
+   WHY THE TRANSCRIPT IS NOT POLISHED
+
+   The obvious version of this feature asks the model to "clean the answer up
+   into a professional tone", and it is wrong in a way that is hard to see
+   afterwards. Two lines below, submitAnswer hands the text to the writing
+   stage introduced by the words "The candidate answered, verbatim". A model
+   that was told to make an answer sound professional fills gaps to do it: "I
+   worked on that a bit" comes back as "led the implementation", the sentence
+   is recorded as something the candidate said, it becomes a line in the
+   document, and because a requirement can only rise when an answer produced an
+   approved line, it also moves the score. An invented sentence would have
+   raised the fit reading that is supposed to be checking it.
+
+   So this transcribes and stops. Disfluency out, nothing in. The professional
+   writing already happens downstream, once, where the candidate can see the
+   proposed line and reject it.
+
+   WHY NOTHING IS TRANSLATED HERE
+
+   translateAnswerForResume already takes the answer into the language of the
+   resume, exactly once, for a reason written out at its own definition. A
+   transcript that arrived pre-translated would be translated twice, and the
+   record of what the candidate actually said would be a translation.
+   ========================================================================= */
+
+var TT_VOICE_RATE = 16000;          // what a transcriber wants; speech is well under 8 kHz
+var TT_VOICE_MAX_MS = 90000;        // the ceiling, enforced rather than suggested
+var TT_VOICE_WARN_MS = 80000;       // when the timer starts saying so
+var TT_VOICE_MIN_MS = 700;          // shorter than this is a mis-click, not an answer
+var TT_VOICE_SILENCE = 0.01;        // peak below this is a room, not a person
+var TT_VOICE_TIMEOUT = 90000;       // a 3.6 MB upload plus the model, not just the model
+
+var TT_VOICE = {
+  state: 'idle',        // idle | asking | rec | busy | error
+  stream: null, rec: null, chunks: [],
+  startedAt: 0, elapsed: 0, tick: null,
+  ac: null, analyser: null, levelBuf: null, level: 0,
+  wav: null,            // kept after a failure so "try again" costs no second recording
+  msg: '', msgTone: '', canRetry: false,
+  chatBusy: false, hitLimit: false
+};
+
+/* Both halves have to be there. Firefox on an insecure origin exposes
+   MediaRecorder and no mediaDevices at all, which would have thrown at the
+   moment the candidate pressed the button rather than at the moment the page
+   could have quietly not offered it. */
+function ttVoiceSupported() {
+  return typeof MediaRecorder !== 'undefined' &&
+         typeof navigator !== 'undefined' && !!navigator.mediaDevices &&
+         typeof navigator.mediaDevices.getUserMedia === 'function' &&
+         typeof (window.AudioContext || window.webkitAudioContext) === 'function';
+}
+
+/* ---------- which models can read audio ----------
+   ListModels says which models do generateContent. It does not say which of
+   them accept an inline audio part, and there is no field that does, so it has
+   to be found out by asking.
+
+   A DENY list rather than a record of the model that worked. Remembering the
+   winner is the obvious design and it freezes the feature: a model released
+   next week would never be tried, because a working answer was already on
+   file. A deny list leaves the cascade starting from the newest model every
+   time and skips only the ones that have actually refused, and it forgets
+   after a day so a model that gains audio support comes back on its own. */
+var TT_VOICE_DENY_KEY = 'tt_voice_deaf_v1';
+var TT_VOICE_DENY_TTL = 24 * 60 * 60 * 1000;
+
+function ttVoiceDenyList() {
+  try {
+    var raw = localStorage.getItem(TT_VOICE_DENY_KEY);
+    if (!raw) return [];
+    var c = JSON.parse(raw);
+    if (!c || !c.ids || (Date.now() - c.ts) > TT_VOICE_DENY_TTL) return [];
+    return c.ids;
+  } catch (e) { return []; }
+}
+
+function ttVoiceDenyAdd(id) {
+  if (!id) return;
+  try {
+    var ids = ttVoiceDenyList();
+    if (ids.indexOf(id) === -1) ids.push(id);
+    localStorage.setItem(TT_VOICE_DENY_KEY, JSON.stringify({ ts: Date.now(), ids: ids }));
+  } catch (e) {}
+}
+
+function ttVoiceModels() {
+  var all = getModelCascade();
+  var deny = ttVoiceDenyList();
+  var list = all.filter(function (m) { return deny.indexOf(m) === -1; });
+  /* Never hand back an empty cascade. If every model is on the list the day
+     has gone wrong in some other way, and trying them all again is a better
+     answer than a feature that refuses without having asked anyone. */
+  return list.length ? list : all;
+}
+
+/* ---------- state to screen ---------- */
+
+function ttVoiceSync() {
+  var active = TT_VOICE.state === 'rec' || TT_VOICE.state === 'busy' || TT_VOICE.state === 'asking';
+  ['btnSendAnswer', 'btnSkipQ', 'btnDoneQ'].forEach(function (id) {
+    var b = $(id);
+    if (b) b.disabled = active || TT_VOICE.chatBusy;
+  });
+  var mic = $('btnVoiceRec');
+  if (mic) {
+    mic.disabled = TT_VOICE.chatBusy || TT_VOICE.state === 'busy' || TT_VOICE.state === 'asking';
+    mic.classList.toggle('is-rec', TT_VOICE.state === 'rec');
+  }
+}
+
+function ttVoiceClock(ms) {
+  var s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60);
+}
+
+function renderVoice() {
+  var bar = $('voiceBar');
+  var lab = $('voiceBtnLabel');
+  if (lab) lab.innerHTML = TT_VOICE.state === 'rec' ? escapeHtml(T('voice.recording')) : T('btn.voice_rec');
+  ttVoiceSync();
+  if (!bar) return;
+
+  if (TT_VOICE.state === 'idle' && !TT_VOICE.msg) {
+    bar.classList.add('tt-hidden');
+    bar.innerHTML = '';
+    return;
+  }
+  bar.classList.remove('tt-hidden');
+  bar.setAttribute('dir', TT_LANG.dir(TT_UI_LANG));
+
+  if (TT_VOICE.state === 'rec') {
+    var over = TT_VOICE.elapsed >= TT_VOICE_WARN_MS;
+    var pct = Math.max(0, Math.min(100, Math.round(TT_VOICE.level * 100)));
+    bar.className = 'tt-voicebar is-rec';
+    bar.innerHTML =
+      '<span class="tt-voicelive"><span class="tt-voicepulse"></span>' +
+        escapeHtml(T('voice.recording')) + '</span>' +
+      '<span class="tt-voiceclock' + (over ? ' is-warn' : '') + '">' +
+        ttVoiceClock(TT_VOICE.elapsed) + ' / ' + ttVoiceClock(TT_VOICE_MAX_MS) + '</span>' +
+      '<span class="tt-voicemeter"><i style="width:' + pct + '%"></i></span>' +
+      '<button type="button" id="btnVoiceStop" class="tt-btn tt-btn-sm tt-btn-ok">' +
+        escapeHtml(T('voice.stop')) + '</button>' +
+      '<button type="button" id="btnVoiceCancel" class="tt-btn tt-btn-sm">' +
+        escapeHtml(T('voice.cancel')) + '</button>';
+    return;
+  }
+
+  if (TT_VOICE.state === 'busy') {
+    bar.className = 'tt-voicebar';
+    bar.innerHTML = '<span class="tt-voicelive"><span class="tt-spin align-middle"></span> ' +
+      escapeHtml(T('voice.processing')) + '</span>';
+    return;
+  }
+
+  bar.className = 'tt-voicebar' + (TT_VOICE.msgTone ? ' is-' + TT_VOICE.msgTone : '');
+  bar.innerHTML = '<span class="tt-voicemsg">' + escapeHtml(TT_VOICE.msg) + '</span>' +
+    (TT_VOICE.canRetry && TT_VOICE.wav
+      ? '<button type="button" id="btnVoiceRetry" class="tt-btn tt-btn-sm">' +
+          escapeHtml(T('voice.retry')) + '</button>'
+      : '');
+}
+
+function ttVoiceSay(msg, tone, canRetry) {
+  TT_VOICE.msg = msg || '';
+  TT_VOICE.msgTone = tone || '';
+  TT_VOICE.canRetry = !!canRetry;
+  renderVoice();
+}
+
+/* ---------- recording ---------- */
+
+/* Releases the microphone, the meter and the timer. Called from every exit,
+   including the ones that failed, because a track left running keeps the
+   browser's recording light on and there is no worse thing this feature could
+   leave behind. */
+function ttVoiceRelease() {
+  if (TT_VOICE.tick) { clearInterval(TT_VOICE.tick); TT_VOICE.tick = null; }
+  try {
+    if (TT_VOICE.rec && TT_VOICE.rec.state !== 'inactive') TT_VOICE.rec.stop();
+  } catch (e) {}
+  TT_VOICE.rec = null;
+  try {
+    if (TT_VOICE.stream) TT_VOICE.stream.getTracks().forEach(function (t) { t.stop(); });
+  } catch (e) {}
+  TT_VOICE.stream = null;
+  try { if (TT_VOICE.ac && TT_VOICE.ac.state !== 'closed') TT_VOICE.ac.close(); } catch (e) {}
+  TT_VOICE.ac = null;
+  TT_VOICE.analyser = null;
+  TT_VOICE.levelBuf = null;
+  TT_VOICE.level = 0;
+}
+
+/* Everything gone, including the recording held for a retry. Called by
+   resetRun, which runs before every pipeline run and on start over: a
+   recording that survived into the next run would drop one job's answer into
+   another job's box. */
+function ttVoiceReset() {
+  ttVoiceRelease();
+  TT_VOICE.chunks = [];
+  TT_VOICE.wav = null;
+  TT_VOICE.state = 'idle';
+  TT_VOICE.elapsed = 0;
+  TT_VOICE.hitLimit = false;
+  TT_VOICE.msg = '';
+  TT_VOICE.msgTone = '';
+  TT_VOICE.canRetry = false;
+  try { renderVoice(); } catch (e) {}
+}
+
+function ttVoiceMimeType() {
+  var want = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+  for (var i = 0; i < want.length; i++) {
+    try { if (MediaRecorder.isTypeSupported(want[i])) return want[i]; } catch (e) {}
+  }
+  return '';
+}
+
+async function ttVoiceStart() {
+  if (TT_VOICE.state === 'rec' || TT_VOICE.state === 'busy' || TT_VOICE.state === 'asking') return;
+  if (!getApiKey()) { ttVoiceSay(T('voice.err_nokey'), 'bad', false); return; }
+
+  TT_VOICE.state = 'asking';
+  TT_VOICE.wav = null;
+  TT_VOICE.hitLimit = false;
+  ttVoiceSay('', '', false);
+
+  var stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+  } catch (e) {
+    TT_VOICE.state = 'idle';
+    var name = (e && e.name) || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+      ttVoiceSay(T('voice.err_denied'), 'bad', false);
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+      ttVoiceSay(T('voice.err_nomic'), 'bad', false);
+    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+      ttVoiceSay(T('voice.err_busy'), 'bad', false);
+    } else {
+      ttVoiceSay(T('voice.err_denied'), 'bad', false);
+    }
+    return;
+  }
+
+  TT_VOICE.stream = stream;
+  TT_VOICE.chunks = [];
+
+  var mt = ttVoiceMimeType();
+  try {
+    TT_VOICE.rec = mt ? new MediaRecorder(stream, { mimeType: mt }) : new MediaRecorder(stream);
+  } catch (e) {
+    try { TT_VOICE.rec = new MediaRecorder(stream); }
+    catch (e2) {
+      ttVoiceRelease();
+      TT_VOICE.state = 'idle';
+      ttVoiceSay(T('voice.err_decode'), 'bad', false);
+      return;
+    }
+  }
+
+  TT_VOICE.rec.ondataavailable = function (ev) {
+    if (ev.data && ev.data.size) TT_VOICE.chunks.push(ev.data);
+  };
+  /* The whole handover happens here rather than after stop() returns, because
+     stop() is asynchronous and the last chunk arrives after it. */
+  TT_VOICE.rec.onstop = function () {
+    var type = (TT_VOICE.rec && TT_VOICE.rec.mimeType) || mt || 'audio/webm';
+    var blob = TT_VOICE.chunks.length ? new Blob(TT_VOICE.chunks, { type: type }) : null;
+    var ms = TT_VOICE.elapsed;
+    ttVoiceRelease();
+    TT_VOICE.chunks = [];
+    if (TT_VOICE.state === 'idle') return;          // cancelled while stopping
+    ttVoiceHandle(blob, ms);
+  };
+
+  /* A level meter, not decoration. The failure this catches is the browser
+     recording from the wrong input: the candidate speaks for ninety seconds,
+     the bar never moves, and they find out before spending the call rather
+     than after. Deliberately NOT connected to the destination; connecting it
+     plays the microphone back through the speakers. */
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    TT_VOICE.ac = new AC();
+    var src = TT_VOICE.ac.createMediaStreamSource(stream);
+    var an = TT_VOICE.ac.createAnalyser();
+    an.fftSize = 512;
+    src.connect(an);
+    TT_VOICE.analyser = an;
+    TT_VOICE.levelBuf = new Uint8Array(an.fftSize);
+  } catch (e) { TT_VOICE.analyser = null; }   // the meter is optional, the recording is not
+
+  try { TT_VOICE.rec.start(); }
+  catch (e) {
+    ttVoiceRelease();
+    TT_VOICE.state = 'idle';
+    ttVoiceSay(T('voice.err_decode'), 'bad', false);
+    return;
+  }
+
+  TT_VOICE.state = 'rec';
+  TT_VOICE.startedAt = Date.now();
+  TT_VOICE.elapsed = 0;
+
+  /* Elapsed time is computed from the clock, not counted in ticks. A
+     background tab throttles setInterval to about once a second, and a counter
+     that added 100 ms per tick would report thirty seconds for ninety. */
+  TT_VOICE.tick = setInterval(function () {
+    TT_VOICE.elapsed = Date.now() - TT_VOICE.startedAt;
+    if (TT_VOICE.analyser && TT_VOICE.levelBuf) {
+      try {
+        TT_VOICE.analyser.getByteTimeDomainData(TT_VOICE.levelBuf);
+        var peak = 0;
+        for (var i = 0; i < TT_VOICE.levelBuf.length; i += 4) {
+          var d = Math.abs(TT_VOICE.levelBuf[i] - 128);
+          if (d > peak) peak = d;
+        }
+        TT_VOICE.level = Math.min(1, peak / 90);
+      } catch (e) {}
+    }
+    if (TT_VOICE.elapsed >= TT_VOICE_MAX_MS) {
+      TT_VOICE.hitLimit = true;
+      ttVoiceStop(true);
+      return;
+    }
+    renderVoice();
+  }, 120);
+
+  renderVoice();
+}
+
+function ttVoiceStop(send) {
+  if (TT_VOICE.state !== 'rec') return;
+  if (!send) {
+    /* Cancel throws the audio away and never reaches a model. The state is set
+       before stop() so the onstop handler knows this was a cancellation. */
+    TT_VOICE.state = 'idle';
+    ttVoiceRelease();
+    TT_VOICE.chunks = [];
+    ttVoiceSay('', '', false);
+    return;
+  }
+  TT_VOICE.state = 'busy';
+  renderVoice();
+  try { TT_VOICE.rec.stop(); }        // onstop does the rest
+  catch (e) {
+    ttVoiceRelease();
+    TT_VOICE.state = 'idle';
+    ttVoiceSay(T('voice.err_decode'), 'bad', false);
+  }
+}
+
+/* ---------- audio to WAV ----------
+   MediaRecorder gives WebM/Opus in Chrome and Firefox and MP4/AAC in Safari.
+   The Gemini inline audio formats are wav, mp3, aiff, aac, ogg and flac, so
+   neither of the two things a browser actually produces can be sent as it
+   stands. Decoding to samples and writing a WAV is the one path that is the
+   same in every browser, and it happens to cut the size as well. */
+
+function ttVoiceMonoMix(channels, length) {
+  var ch = channels.length;
+  var mono = new Float32Array(length);
+  if (ch === 1) { mono.set(channels[0].subarray(0, length)); return mono; }
+  for (var c = 0; c < ch; c++) {
+    var d = channels[c];
+    for (var i = 0; i < length; i++) mono[i] += d[i];
+  }
+  for (var i2 = 0; i2 < length; i2++) mono[i2] /= ch;
+  return mono;
+}
+
+/* Averaging every window rather than picking one sample out of each. Picking
+   is shorter and it aliases: everything above 8 kHz folds back down into the
+   speech band as a whistle, in exactly the range a transcriber is listening
+   to. Averaging is a crude low pass and costs nothing. */
+function ttVoiceResample(input, fromRate, toRate) {
+  if (fromRate === toRate) return input;
+  var ratio = fromRate / toRate;
+  var outLen = Math.max(1, Math.floor(input.length / ratio));
+  var out = new Float32Array(outLen);
+  for (var i = 0; i < outLen; i++) {
+    var start = i * ratio;
+    var i0 = Math.floor(start);
+    var i1 = Math.min(input.length, Math.ceil(start + ratio));
+    var sum = 0, n = 0;
+    for (var j = i0; j < i1; j++) { sum += input[j]; n++; }
+    out[i] = n ? sum / n : 0;
+  }
+  return out;
+}
+
+function ttVoiceWavEncode(samples, rate) {
+  var n = samples.length;
+  var buf = new ArrayBuffer(44 + n * 2);
+  var v = new DataView(buf);
+  function str(off, s) { for (var i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); }
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + n * 2, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);          // uncompressed PCM
+  v.setUint16(22, 1, true);          // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, 'data');
+  v.setUint32(40, n * 2, true);
+  var off = 44;
+  for (var i = 0; i < n; i++) {
+    /* Clamped before scaling. A sample slightly over 1.0, which resampling can
+       produce, wraps to a large negative number without this and clicks. */
+    var s = samples[i];
+    s = s < -1 ? -1 : s > 1 ? 1 : s;
+    v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
+  }
+  return buf;
+}
+
+function ttVoicePeak(samples) {
+  var peak = 0;
+  for (var i = 0; i < samples.length; i++) {
+    var a = samples[i] < 0 ? -samples[i] : samples[i];
+    if (a > peak) peak = a;
+  }
+  return peak;
+}
+
+/* Chunked. String.fromCharCode.apply on a three megabyte array is a stack
+   overflow rather than a string, and only on long recordings, which is the
+   worst possible way to find out. */
+function ttVoiceBase64(buf) {
+  var bytes = new Uint8Array(buf);
+  var CH = 0x8000, parts = [];
+  for (var i = 0; i < bytes.length; i += CH) {
+    parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CH)));
+  }
+  return btoa(parts.join(''));
+}
+
+/* Both shapes of decodeAudioData: older Safari has only the callback form and
+   returns undefined, newer browsers return a promise. */
+function ttVoiceDecode(ac, arrayBuffer) {
+  return new Promise(function (resolve, reject) {
+    var p;
+    try { p = ac.decodeAudioData(arrayBuffer, resolve, reject); }
+    catch (e) { reject(e); return; }
+    if (p && typeof p.then === 'function') p.then(resolve, reject);
+  });
+}
+
+async function ttVoiceHandle(blob, ms) {
+  if (!blob || ms < TT_VOICE_MIN_MS) {
+    TT_VOICE.state = 'idle';
+    ttVoiceSay(T('voice.err_short'), 'warn', false);
+    return;
+  }
+
+  var wav;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    var ac = new AC();
+    var raw = await blob.arrayBuffer();
+    var decoded = await ttVoiceDecode(ac, raw);
+    var chans = [];
+    for (var c = 0; c < decoded.numberOfChannels; c++) chans.push(decoded.getChannelData(c));
+    var mono = ttVoiceMonoMix(chans, decoded.length);
+    try { ac.close(); } catch (e) {}
+
+    if (ttVoicePeak(mono) < TT_VOICE_SILENCE) {
+      TT_VOICE.state = 'idle';
+      ttVoiceSay(T('voice.err_silent'), 'warn', false);
+      return;
+    }
+    wav = ttVoiceWavEncode(ttVoiceResample(mono, decoded.sampleRate, TT_VOICE_RATE), TT_VOICE_RATE);
+  } catch (e) {
+    TT_VOICE.state = 'idle';
+    ttVoiceSay(T('voice.err_decode'), 'bad', false);
+    return;
+  }
+
+  TT_VOICE.wav = wav;            // held so a retry costs no second recording
+  await ttVoiceTranscribe();
+}
+
+function ttVoicePrompt() {
+  return [
+    'You are a transcription tool. The attached audio is one person answering a question about their own work experience.',
+    '',
+    'Write down what the speaker said. Then stop.',
+    '',
+    'Rules:',
+    '1. Transcribe in the language actually spoken. Do not translate. If the speaker mixes languages, keep each part in the language it was spoken in.',
+    '2. Remove disfluency only: stutters, false starts, accidental repetitions, hesitation sounds and filler words. Every language has its own set; remove whatever the spoken language uses. Removing them must not change the meaning of any sentence.',
+    '3. Keep every fact exactly as spoken: numbers, dates, durations, job titles, organisation names, product names, tools, standards, team sizes and technical terms. Keep each term in the language it was spoken in, even when the rest of the sentence is in another language.',
+    '4. Add nothing. Not a fact, not a number, not a detail, not a qualifier, not an opening or closing sentence. If the speaker was vague, the transcript is vague. If the speaker gave no figure, there is no figure.',
+    '5. Do not rewrite, improve, shorten, expand, or make the wording sound more professional. This is a transcript, not a draft.',
+    '6. Punctuate normally for the language spoken, and start a new paragraph where the speaker clearly moved to a new point.',
+    '7. If there is no intelligible speech, output nothing at all.',
+    '',
+    'Output only the transcript: no preamble, no notes, no quotation marks, no explanation.'
+  ].join('\n');
+}
+
+async function ttVoiceTranscribe() {
+  if (!TT_VOICE.wav) return;
+  if (!getApiKey()) { TT_VOICE.state = 'idle'; ttVoiceSay(T('voice.err_nokey'), 'bad', false); return; }
+
+  TT_VOICE.state = 'busy';
+  ttVoiceSay('', '', false);
+
+  var deaf = [];
+  try {
+    var text = await callGeminiVision(
+      ttVoiceBase64(TT_VOICE.wav), 'audio/wav', ttVoicePrompt(),
+      {
+        temperature: 0,                 // a transcript has one right answer
+        maxOutputTokens: 4096,
+        timeoutMs: TT_VOICE_TIMEOUT,    // the upload counts towards this, not just the model
+        models: ttVoiceModels(),
+        cascadeOn400: true,             // a model that cannot read audio says 400
+        onUnsupported: function (id) { deaf.push(id); }
+      }
+    );
+    deaf.forEach(ttVoiceDenyAdd);
+
+    var clean = String(text || '').trim().replace(/^["'\u201C\u201D\u00AB\u00BB]+|["'\u201C\u201D\u00AB\u00BB]+$/g, '').trim();
+    if (!clean) {
+      TT_VOICE.state = 'idle';
+      ttVoiceSay(T('voice.err_nospeech'), 'warn', true);
+      return;
+    }
+    TT_VOICE.state = 'idle';
+    ttVoiceInsert(clean);
+    TT_VOICE.wav = null;
+    ttVoiceSay(TT_VOICE.hitLimit ? T('voice.limit') + ' ' + T('voice.added') : T('voice.added'), 'ok', false);
+  } catch (e) {
+    deaf.forEach(ttVoiceDenyAdd);
+    TT_VOICE.state = 'idle';
+    var msg = (e && e.message) || '';
+    /* Every model refused the audio, as opposed to one model being busy. Worth
+       its own sentence, because retrying is pointless and typing is not. */
+    if (deaf.length && ttVoiceModels().length === 0) ttVoiceSay(T('voice.err_nomodel'), 'bad', false);
+    else ttVoiceSay(msg || T('voice.err_final'), 'bad', true);
+  }
+}
+
+/* The retry sends the recording that is already in memory. Asking someone to
+   say all of it again because a quota window was busy is the sort of thing
+   that stops a feature being used at all. */
+async function ttVoiceRetry() {
+  if (!TT_VOICE.wav || TT_VOICE.state === 'busy') return;
+  TT_VOICE.canRetry = false;
+  await ttVoiceTranscribe();
+  /* A second failure is the end of it: the recording is released and the
+     message says so, so the answer gets typed instead of retried for ever. */
+  if (TT_VOICE.state === 'idle' && TT_VOICE.msgTone === 'bad') {
+    TT_VOICE.wav = null;
+    ttVoiceSay(T('voice.err_final'), 'bad', false);
+  }
+}
+
+/* ---------- into the box ----------
+   Appended, never substituted. Someone who typed half an answer and then
+   decided to say the rest keeps the half they typed. */
+function ttVoiceInsert(text) {
+  var box = $('chatAnswer');
+  if (!box) return;
+  var had = String(box.value || '').replace(/\s+$/, '');
+  box.value = had ? (had + '\n' + text) : text;
+
+  /* Assigning .value does not fire an input event, and three things are
+     listening for one: the hint that clears itself, the spell layer that
+     re-measures the box, and the spell check itself. Without this the
+     transcript would sit in a box the rest of the app believes is empty, with
+     last paragraph's underlines still drawn under it. */
+  var fired = false;
+  try { box.dispatchEvent(new Event('input', { bubbles: true })); fired = true; } catch (e) {}
+  if (!fired) {
+    try { if (typeof ttClearAnswerHint === 'function') ttClearAnswerHint(); } catch (e) {}
+    try { if (typeof scheduleAnswerSpell === 'function') scheduleAnswerSpell(); } catch (e) {}
+  }
+  try {
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {}
+}
+
+/* ---------- wiring ----------
+   The bar is rebuilt on every state change, so its two buttons are reached by
+   delegation from a container that does not move. Binding them directly would
+   have to be redone after every repaint and would leak a listener each time. */
+function bindVoiceUi() {
+  var mic = $('btnVoiceRec');
+  if (!mic) return;
+  if (!ttVoiceSupported()) {
+    /* Hidden rather than disabled. A greyed out button asks to be pressed and
+       then explains that this browser cannot do it, which helps nobody. */
+    mic.classList.add('tt-hidden');
+    return;
+  }
+  mic.addEventListener('click', function () {
+    if (TT_VOICE.state === 'rec') ttVoiceStop(true);
+    else ttVoiceStart();
+  });
+  var bar = $('voiceBar');
+  if (bar) bar.addEventListener('click', function (ev) {
+    var t = ev.target;
+    while (t && t !== bar && t.tagName !== 'BUTTON') t = t.parentNode;
+    if (!t || t === bar) return;
+    if (t.id === 'btnVoiceStop') ttVoiceStop(true);
+    else if (t.id === 'btnVoiceCancel') ttVoiceStop(false);
+    else if (t.id === 'btnVoiceRetry') ttVoiceRetry();
+  });
+  /* Leaving the page mid recording releases the microphone. Without this the
+     browser's recording indicator can outlive the tab's usefulness. */
+  window.addEventListener('pagehide', function () { try { ttVoiceRelease(); } catch (e) {} });
+  renderVoice();
+}
+
 </script>
 </body>
 </html>
