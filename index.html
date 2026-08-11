@@ -2299,7 +2299,7 @@
           <button data-view="struct" class="is-on">מבנה קורות החיים</button>
           <button data-view="text">טקסט גולמי</button>
         </div>
-        <span class="tt-sub" id="finalViewNote">אותו טקסט בדיוק, מוצג לפי הסקציות שלו.</span>
+        <span class="tt-sub" id="finalViewNote">אותו טקסט בדיוק, מוצג לפי הסקציות שלו. העיצוב הסופי — גופן, גדלים וצבע — נמצא בתצוגה המקדימה שלמטה.</span>
       </div>
       <div id="finalStructWrap" class="tt-struct"><div id="finalStruct" class="tt-sheet"></div></div>
       <div id="finalTextWrap" class="tt-hidden">
@@ -13842,7 +13842,7 @@ function setFinalView(view) {
   if (tx) tx.classList.toggle('tt-hidden', TT_FINAL_VIEW !== 'text');
   if (note) {
     note.textContent = TT_FINAL_VIEW === 'struct'
-      ? H('אותו טקסט בדיוק, מוצג לפי הסקציות שלו.')
+      ? H('אותו טקסט בדיוק, מוצג לפי הסקציות שלו. העיצוב הסופי — גופן, גדלים וצבע — נמצא בתצוגה המקדימה שלמטה.')
       : H('הטקסט כפי שהוא נשמר. עריכה כאן דורשת רענון כדי להיכנס לתצוגה.');
   }
   if (TT_FINAL_VIEW === 'struct') renderFinalStruct();
@@ -13887,7 +13887,17 @@ function renderFinalStruct() {
     }
     if (l.cat === 'header') { html += '<div class="tt-ct" dir="' + d + '">' + escapeHtml(l.raw.trim()) + '</div>'; return; }
     if (l.isHeading) { html += '<div class="tt-sec" dir="' + d + '"><span>' + escapeHtml(l.text) + '</span></div>'; return; }
-    if (l.subtype === 'roleheader') { html += '<div class="tt-role" dir="' + d + '">' + escapeHtml(l.text) + '</div>'; return; }
+    /* v39.4. The print sheet and the Word writer both refuse to draw a role
+       header inside the military service or the languages section, and the two
+       screen renderers did not. Nothing reaches that state today: role headers
+       are marked only in experience, education and other, and the manual
+       override is allowed only in summary, experience, skills and other. It was
+       still a place where the screen and the downloaded file would have said
+       different things, waiting for one name to be added to either list, and a
+       difference nobody can see is the kind that ships. All four renderers now
+       carry the same line. */
+    var plainOnly = (l.cat === 'military' || l.cat === 'languages');
+    if (!plainOnly && l.subtype === 'roleheader') { html += '<div class="tt-role" dir="' + d + '">' + escapeHtml(l.text) + '</div>'; return; }
     var inner = runsToHtml(emphasisRuns(l.text, l.cat), { metrics: 'screen' });
     if (l.type === 'bullet') {
       html += '<div class="tt-bl" dir="' + d + '"><span class="tt-dot">' + escapeHtml(bulletGlyph(l.marker)) +
@@ -17423,7 +17433,10 @@ function renderPreview() {
               escapeHtml(headingText(l.text, tpl)) + '</div>';
       return;
     }
-    if (l.subtype === 'roleheader') {
+    // v39.4: the same guard the print sheet and the Word writer already had.
+    // See the note in renderFinalStruct for why it is written in four places.
+    var plainOnly = (l.cat === 'military' || l.cat === 'languages');
+    if (!plainOnly && l.subtype === 'roleheader') {
       var pr = spineRole(doc, i);
       var cls = pr === 'title' ? 'tt-pv-role' : pr === 'dates' ? 'tt-pv-date' : 'tt-pv-org';
       html += '<div class="' + cls + '"' + attrs + '>' + escapeHtml(l.text) + '</div>';
@@ -18309,19 +18322,25 @@ var TT_I18N = (function () {
     '<span class="tt-tag">ステップ 6</span>チェックと結果',
     '<span class="tt-tag">चरण 6</span>जाँच और परिणाम'
   ]);
+  /* v39.4. The sentence gained a second half. The structure view and the
+     preview page below it show the same words with the same marks, which is
+     verified rather than assumed, but the structure view draws in the type of
+     the interface rather than in the chosen template. One document in two
+     typefaces across two consecutive panels is a reasonable thing to wonder
+     about, and one line answers it. */
   put('final.view_note', '#finalViewNote', [
-    'אותו טקסט בדיוק, מוצג לפי הסקציות שלו.',
-    'النص نفسه تمامًا، معروضًا حسب أقسامه.',
-    'Exactly the same text, shown by its sections.',
-    'Exactement le même texte, présenté par rubriques.',
-    'Exactamente el mismo texto, mostrado por sus secciones.',
-    'Genau derselbe Text, nach seinen Abschnitten dargestellt.',
-    'Esattamente lo stesso testo, mostrato per sezioni.',
-    'Exatamente o mesmo texto, exibido por suas seções.',
-    'Točno isti tekst, prikazan po odjeljcima.',
-    'Тот же самый текст, показанный по разделам.',
-    'まったく同じ本文を、区分ごとに表示しています。',
-    'ठीक वही पाठ, उसके अनुभागों के अनुसार दिखाया गया।'
+    'אותו טקסט בדיוק, מוצג לפי הסקציות שלו. העיצוב הסופי — גופן, גדלים וצבע — נמצא בתצוגה המקדימה שלמטה.',
+    'النص نفسه تمامًا، معروضًا حسب أقسامه. والشكل النهائي — الخط والأحجام واللون — في المعاينة أدناه.',
+    'Exactly the same text, shown by its sections. The final look — typeface, sizes and colour — is in the preview below.',
+    'Exactement le même texte, présenté par rubriques. Le rendu final — police, tailles et couleur — se trouve dans la prévisualisation ci-dessous.',
+    'Exactamente el mismo texto, mostrado por sus secciones. El aspecto final — tipografía, tamaños y color — está en la vista previa de abajo.',
+    'Genau derselbe Text, nach seinen Abschnitten dargestellt. Das endgültige Aussehen — Schrift, Größen und Farbe — finden Sie in der Vorschau unten.',
+    'Esattamente lo stesso testo, mostrato per sezioni. Aspetto finale — carattere, dimensioni e colore — nella anteprima qui sotto.',
+    'Exatamente o mesmo texto, exibido por suas seções. A aparência final — fonte, tamanhos e cor — está na pré-visualização abaixo.',
+    'Točno isti tekst, prikazan po odjeljcima. Konačan izgled — pismo, veličine i boja — nalazi se u pregledu ispod.',
+    'Тот же самый текст, показанный по разделам. Окончательный вид — шрифт, размеры и цвет — в предпросмотре ниже.',
+    'まったく同じ本文を、区分ごとに表示しています。最終的な見た目（書体・サイズ・色）は下のプレビューで確認できます。',
+    'ठीक वही पाठ, उसके अनुभागों के अनुसार दिखाया गया। अंतिम रूप — फ़ॉन्ट, आकार और रंग — नीचे दिए पूर्वावलोकन में है।'
   ]);
   put('card.preview_title', '#previewCard > h2', [
     '<span class="tt-tag">הורדה</span>תצוגה מקדימה, בדיוק כפי שזה יירד',
@@ -18949,7 +18968,7 @@ var TT_TX = {
 'TrueTailor CV — ההתאמה המדויקת למשרה הבאה שלך':['TrueTailor CV — التخصيص الدقيق لوظيفتك التالية','TrueTailor CV — the precise fit for your next job','TrueTailor CV — l\'adaptation précise pour votre prochain poste','TrueTailor CV — el ajuste preciso para tu próximo puesto','TrueTailor CV — die punktgenaue Anpassung für Ihre nächste Stelle','TrueTailor CV — l\'adattamento preciso per la tua prossima posizione','TrueTailor CV — o ajuste preciso para a sua próxima vaga','TrueTailor CV — precizna prilagodba za vaš sljedeći posao','TrueTailor CV — точная подгонка под вашу следующую вакансию','TrueTailor CV — 次の求人にぴたりと合わせる','TrueTailor CV — आपकी अगली नौकरी के लिए सटीक तैयारी'],
 'אבל הצעות הצמצום לתפקידים הקודמים ברשימת האישורים מקטינות בדיוק את הפער הזה.':['لكن اقتراحات التقليص للوظائف السابقة في قائمة الموافقات تقلّص هذه الفجوة بالضبط.','but the trimming suggestions for the earlier roles in the approval list shrink exactly this gap.','mais les propositions de réduction des postes antérieurs dans la liste de validation réduisent précisément cet écart.','pero las propuestas de recorte de los puestos anteriores en la lista de aprobación reducen justo esa brecha.','aber die Kürzungsvorschläge für die früheren Positionen in der Freigabeliste verringern genau diese Lücke.','ma le proposte di riduzione degli incarichi precedenti nell\'elenco di approvazione riducono proprio questo divario.','mas as sugestões de corte dos cargos anteriores na lista de aprovação reduzem exatamente essa lacuna.','ali prijedlozi skraćivanja prethodnih radnih mjesta na popisu odobrenja smanjuju upravo taj razmak.','но предложения по сокращению прежних должностей в списке утверждения уменьшают именно этот разрыв.','ただし承認一覧にある過去の職務の圧縮提案が、まさにこの差を縮めます。','पर स्वीकृति सूची में पिछले पदों के संक्षेपण सुझाव ठीक यही अंतर घटाते हैं।'],
 'אבל קוראים לה בשם שנהוג בתחום שלך ולא בשם שהמשרה משתמשת בו':['لكنها تُسمّى بالاسم المتعارف عليه في مجالك لا بالاسم الذي تستخدمه الوظيفة','but it is called by the name used in your own field, not the name the posting uses','mais elle porte le nom en usage dans votre domaine, pas celui employé par l\'annonce','pero se llama con el nombre usual en tu campo, no con el que usa la oferta','aber sie trägt den in Ihrem Fach üblichen Namen, nicht den der Anzeige','ma è chiamata con il nome in uso nel tuo settore, non con quello dell\'annuncio','mas é chamada pelo nome usado na sua área, não pelo nome que a vaga usa','ali se naziva imenom uobičajenim u vašem području, ne onim koje oglas koristi','но она названа так, как принято в вашей области, а не так, как в вакансии','ただし、求人票の呼び方ではなく、あなたの分野で通用する呼び方になっています','पर उसे आपके क्षेत्र के प्रचलित नाम से पुकारा जाता है, विज्ञापन के नाम से नहीं'],
-'אותו טקסט בדיוק, מוצג לפי הסקציות שלו.':['النص نفسه تمامًا، معروضًا حسب أقسامه.','Exactly the same text, shown by its sections.','Exactement le même texte, présenté par rubriques.','Exactamente el mismo texto, mostrado por sus secciones.','Genau derselbe Text, nach seinen Abschnitten dargestellt.','Esattamente lo stesso testo, mostrato per sezioni.','Exatamente o mesmo texto, exibido por suas seções.','Točno isti tekst, prikazan po odjeljcima.','Тот же самый текст, показанный по разделам.','まったく同じ本文を、区分ごとに表示しています。','ठीक वही पाठ, उसके अनुभागों के अनुसार दिखाया गया।'],
+'אותו טקסט בדיוק, מוצג לפי הסקציות שלו. העיצוב הסופי — גופן, גדלים וצבע — נמצא בתצוגה המקדימה שלמטה.':['النص نفسه تمامًا، معروضًا حسب أقسامه. والشكل النهائي — الخط والأحجام واللون — في المعاينة أدناه.','Exactly the same text, shown by its sections. The final look — typeface, sizes and colour — is in the preview below.','Exactement le même texte, présenté par rubriques. Le rendu final — police, tailles et couleur — se trouve dans la prévisualisation ci-dessous.','Exactamente el mismo texto, mostrado por sus secciones. El aspecto final — tipografía, tamaños y color — está en la vista previa de abajo.','Genau derselbe Text, nach seinen Abschnitten dargestellt. Das endgültige Aussehen — Schrift, Größen und Farbe — finden Sie in der Vorschau unten.','Esattamente lo stesso testo, mostrato per sezioni. Aspetto finale — carattere, dimensioni e colore — nella anteprima qui sotto.','Exatamente o mesmo texto, exibido por suas seções. A aparência final — fonte, tamanhos e cor — está na pré-visualização abaixo.','Točno isti tekst, prikazan po odjeljcima. Konačan izgled — pismo, veličine i boja — nalazi se u pregledu ispod.','Тот же самый текст, показанный по разделам. Окончательный вид — шрифт, размеры и цвет — в предпросмотре ниже.','まったく同じ本文を、区分ごとに表示しています。最終的な見た目（書体・サイズ・色）は下のプレビューで確認できます。','ठीक वही पाठ, उसके अनुभागों के अनुसार दिखाया गया। अंतिम रूप — फ़ॉन्ट, आकार और रंग — नीचे दिए पूर्वावलोकन में है।'],
 'אחוזים, סכומים, כמויות, זמני תגובה, גודל צוות. בלי מספר אחד לפחות בכל תפקיד רלוונטי, כל שורה נקראת כתיאור תפקיד ולא כהישג.':['نسب، مبالغ، كميات، أزمنة استجابة، حجم فريق. بلا رقم واحد على الأقل في كل وظيفة ذات صلة، يُقرأ كل سطر كتوصيف وظيفة لا كإنجاز.','Percentages, sums, volumes, response times, team size. Without at least one number in every relevant role, each line reads as a job description and not as an achievement.','Pourcentages, montants, volumes, temps de réponse, taille d\'équipe. Sans au moins un chiffre dans chaque poste pertinent, chaque ligne se lit comme une fiche de poste et non comme une réalisation.','Porcentajes, importes, volúmenes, tiempos de respuesta, tamaño de equipo. Sin al menos una cifra en cada puesto relevante, cada línea se lee como una descripción de puesto y no como un logro.','Prozente, Beträge, Mengen, Reaktionszeiten, Teamgröße. Ohne mindestens eine Zahl in jeder relevanten Station liest sich jede Zeile als Stellenbeschreibung und nicht als Erfolg.','Percentuali, importi, volumi, tempi di risposta, dimensione del team. Senza almeno un numero in ogni incarico pertinente, ogni riga si legge come una descrizione di ruolo e non come un risultato.','Percentuais, valores, volumes, tempos de resposta, tamanho de equipe. Sem ao menos um número em cada cargo relevante, cada linha lê-se como descrição de função e não como realização.','Postoci, iznosi, količine, vremena odziva, veličina tima. Bez barem jednog broja u svakom važnom radnom mjestu, svaki se redak čita kao opis posla a ne kao postignuće.','Проценты, суммы, объёмы, время отклика, размер команды. Без хотя бы одного числа в каждой релевантной должности каждая строка читается как описание должности, а не как достижение.','割合、金額、数量、応答時間、チーム規模。関連する各職務に最低一つの数値がなければ、どの行も成果ではなく職務記述として読まれます。','प्रतिशत, राशियाँ, मात्राएँ, प्रतिक्रिया समय, टीम का आकार। हर प्रासंगिक पद में कम से कम एक संख्या के बिना, हर पंक्ति उपलब्धि नहीं, पद-विवरण की तरह पढ़ी जाती है।'],
 'אי אפשר להמציא סעיפים לתפקיד הנוכחי ולכן האפליקציה לא תעשה זאת, ':['لا يمكن اختلاق بنود للوظيفة الحالية ولذلك لن يفعل التطبيق ذلك، ','Points cannot be invented for the current role, so the app does not do it, ','On ne peut pas inventer d\'éléments pour le poste actuel, l\'application ne le fait donc pas, ','No se pueden inventar puntos para el puesto actual, así que la aplicación no lo hace, ','Für die aktuelle Position lassen sich keine Punkte erfinden, daher tut die Anwendung es nicht, ','Non si possono inventare punti per l\'incarico attuale, quindi l\'app non lo fa, ','Não se podem inventar itens para o cargo atual, então o aplicativo não o faz, ','Za trenutno radno mjesto ne mogu se izmišljati stavke, pa aplikacija to i ne radi, ','Пункты для текущей должности выдумать нельзя, поэтому приложение этого не делает, ','現在の職務の項目を作り出すことはできないため、このアプリはそれを行いません。','वर्तमान पद के लिए बिंदु गढ़े नहीं जा सकते, इसलिए ऐप ऐसा नहीं करता, '],
 'איזון אוטומטי':['موازنة تلقائية','Balanced automatically','Équilibrage automatique','Equilibrio automático','Automatischer Ausgleich','Bilanciamento automatico','Equilíbrio automático','Automatsko uravnoteženje','Автоматическая балансировка','自動調整','स्वतः संतुलन'],
