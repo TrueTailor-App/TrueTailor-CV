@@ -278,6 +278,12 @@
   }
   .tt-voicebtn.is-rec { border-color:#EFB6B1; color:var(--c-bad); background:var(--c-bad-w); }
   .tt-voicebtn.is-rec .tt-voicedot { background:var(--c-bad); animation:ttvoicepulse 1.1s ease-in-out infinite; }
+  /* v39.1. The icon that replaced the dot. It carries no colour of its own so
+     that the button's own colour, including the red of is-rec, is the only
+     thing deciding how it looks. */
+  .tt-voicebtn .tt-voicemic { display:block; flex:none; color:var(--c-mute); transition:color .2s; }
+  .tt-voicebtn:hover .tt-voicemic { color:inherit; }
+  .tt-voicebtn.is-rec .tt-voicemic { color:var(--c-bad); animation:ttvoicepulse 1.1s ease-in-out infinite; }
   @keyframes ttvoicepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.72); } }
 
   .tt-voicebar {
@@ -310,7 +316,7 @@
   }
   .tt-voicemeter i { display:block; height:100%; background:var(--c-bad); transition:width .09s linear; }
   @media (prefers-reduced-motion: reduce) {
-    .tt-voicebtn.is-rec .tt-voicedot, .tt-voicepulse { animation:none; }
+    .tt-voicebtn.is-rec .tt-voicedot, .tt-voicebtn.is-rec .tt-voicemic, .tt-voicepulse { animation:none; }
     .tt-voicemeter i { transition:none; }
   }
 
@@ -1712,7 +1718,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v39.0</span>
+        <span class="tt-ver" id="verBadge">v39.3</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2153,10 +2159,22 @@
              to keep in step. -->
         <button id="btnVoiceRec" type="button" class="tt-btn tt-voicebtn"
                 aria-label="ענה על השאלה בהקלטה קולית" title="ענה על השאלה בהקלטה קולית">
-          <span class="tt-voicedot" aria-hidden="true"></span><span id="voiceBtnLabel">הקלט תשובה</span>
+          <!-- v39.1. A dot meant nothing until it was already pulsing red. The
+               microphone says what the button does before it is pressed, which
+               is the whole job of an icon. It inherits currentColor, so the
+               is-rec rule turns it red with the rest of the button and it
+               pulses in place of the old dot. -->
+          <svg class="tt-voicemic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+            <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" fill="currentColor"/>
+            <path d="M5.5 11a.9.9 0 0 1 1.8 0 4.7 4.7 0 0 0 9.4 0 .9.9 0 0 1 1.8 0 6.5 6.5 0 0 1-5.6 6.4V20h2.3a.9.9 0 0 1 0 1.8H8.8a.9.9 0 0 1 0-1.8h2.3v-2.6A6.5 6.5 0 0 1 5.5 11z" fill="currentColor"/>
+          </svg><span id="voiceBtnLabel">הקלט תשובה</span>
         </button>
         <button id="btnSendAnswer" class="tt-btn tt-btn-primary">שלח תשובה</button>
         <button id="btnSkipQ" class="tt-btn">דלג על השאלה</button>
+        <!-- v39.2. Sits next to skip because it belongs to the same moment: this
+             is the question in front of you and these are the three things you
+             can do with it. Hidden until there is something to go back to. -->
+        <button id="btnBackQ" class="tt-btn tt-hidden">↩ חזור לשאלה הקודמת</button>
         <button id="btnDoneQ" class="tt-btn tt-btn-ok">סיימתי, בנה את הגרסה</button>
         <button id="btnRetryQ" class="tt-btn tt-hidden">↻ נסה שוב</button>
         <span id="chatCounter" class="text-xs self-center" style="color:var(--c-mute)"></span>
@@ -2165,13 +2183,32 @@
            else. Deliberately not #chatCounter: setChatBusy overwrites that on
            every turn, so a message left there would vanish mid sentence. -->
       <div id="voiceBar" class="tt-voicebar tt-hidden" role="status" aria-live="polite"></div>
+      <!-- v39.2. Deliberately on its own line and below everything else. It
+           throws away every answer given so far, and a destructive control that
+           sits in the same row as send is a control that gets pressed by
+           accident. -->
+      <div class="flex flex-wrap items-center gap-2 mt-3">
+        <button id="btnRestartQ" class="tt-btn tt-btn-sm tt-hidden">↻ התחל את כל השאלות מחדש</button>
+        <span id="chatNavNote" class="text-xs tt-hidden" style="color:var(--c-mute)">חזרה אחורה מחזירה גם את התשובה שכתבת. התחלה מחדש מוחקת את כל התשובות.</span>
+      </div>
     </div>
   </section>
 
   <!-- WHAT THE ANSWERS DID -->
   <section id="answersCard" class="tt-hidden tt-card mb-4">
     <h2 class="tt-card-title mb-2"><span class="tt-tag">שלב 4</span>מה נעשה עם התשובות שלך</h2>
+    <!-- v39.2. An answer can be corrected after the version was written. What
+         must never happen is a corrected answer sitting quietly above a resume
+         that was built from the old one, so the bar appears the moment an
+         answer changes and stays until the version is rebuilt from it. -->
+    <div id="answersDirtyBar" class="tt-hidden flex flex-wrap items-center gap-2 mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2">
+      <span id="answersDirtyText" class="text-xs text-amber-900">תשובה השתנתה. הגרסה ואחוז ההתאמה עדיין בנויים על התשובה הקודמת.</span>
+      <button id="btnRebuildFromAnswers" class="tt-btn tt-btn-primary tt-btn-sm ms-auto">בנה מחדש מהתשובות</button>
+    </div>
     <div id="answersOut" class="text-sm"></div>
+    <div class="mt-3">
+      <button id="btnRestartFromAnswers" class="tt-btn tt-btn-sm">↻ חזור לשאלות והתחל אותן מחדש</button>
+    </div>
   </section>
 
   <!-- STEP 5 REVIEW -->
@@ -2280,6 +2317,13 @@
         <span>תבליטים בסעיפי הניסיון, הכישורים והסעיפים הנוספים</span>
       </label>
       <span id="bulletToggleNote" class="text-xs text-slate-500"></span>
+      <!-- v39.3. On by default, and switchable because a bold term is a
+           judgement about what a reader should look at first, not a fact. -->
+      <label class="inline-flex items-center gap-2 cursor-pointer">
+        <input id="kwBoldToggle" type="checkbox" class="w-4 h-4" checked>
+        <span id="kwBoldToggleLabel">הדגשת מונחים שמופיעים גם במודעה וגם בקורות החיים</span>
+      </label>
+      <span id="kwBoldNote" class="text-xs text-slate-500"></span>
     </div>
 
     <div id="previewDirtyBar" class="tt-hidden mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
@@ -2354,7 +2398,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.0';
+var TT_VERSION = 'v39.3';
 
 var APP = {
   apiKey: '',
@@ -2422,6 +2466,14 @@ var APP = {
      See scheduleGrammarPass. */
   grammar: { state: 'idle', fixes: [], refused: [], forText: '', error: '', promise: null },
   finalText: '',
+  /* v39.3. Marking the posting's terms where the resume already says them.
+     On by default: it is the reason the tailored file reads differently to a
+     recruiter at a glance. */
+  kwBold: true,
+  /* v39.2. An answer was corrected after the version was written, and the
+     version has not been rebuilt from it yet. */
+  answersDirty: false,
+  answerEdit: null,
   template: 'classic',
   /* Which step of the active fit ladder the document is rendered at. Zero is
      the template as designed. It is recomputed on every preview render and read
@@ -3943,7 +3995,7 @@ var EMPHASIS_LABEL_CATEGORIES = { skills: true };
 
 /* One body line, split into the runs that render it. Returns a single plain
    run for the ordinary case, so every caller can use it unconditionally. */
-function emphasisRuns(text, cat) {
+function emphasisRunsBase(text, cat) {
   var s = String(text == null ? '' : text);
   if (!s) return [{ text: s, bold: false, italic: false, underline: false }];
 
@@ -3960,6 +4012,175 @@ function emphasisRuns(text, cat) {
     { text: parts.label + parts.colon + ' ', bold: !!mark.bold, italic: !!mark.italic, underline: !!mark.underline },
     { text: parts.rest, bold: false, italic: false, underline: false }
   ];
+}
+
+/* =========================================================================
+   THE POSTING'S OWN WORDS, MARKED WHERE THE RESUME ALREADY SAYS THEM   v39.3
+
+   Bold, never colour, and never on a word the posting did not ask for. The
+   list marked here is allKeywords(), which IS the posting's vocabulary, and a
+   term is only ever marked at a place where it occurs in the resume. So the
+   rule holds by construction: what gets marked appears in both documents.
+
+   Three things this is careful about, each of which would have been a defect:
+
+   WHOLE WORDS ONLY. Bold splits a paragraph into several runs in a docx, and a
+   naive parser that stitches runs back together can lose or gain a space at
+   the seam. As long as a mark starts and ends on a word boundary, even a naive
+   stitch reproduces the text character for character. Hebrew glues its
+   prepositions to the front of a word, so a mark on "מערכות" inside "במערכות"
+   is extended backwards to cover the whole word rather than splitting it.
+
+   A LINE THAT IS ALL KEYWORDS IS LEFT ALONE. On a skills line every second
+   word is a posting term, and marking them turns the line bold end to end,
+   which emphasises nothing and reads as a fault. Above forty percent of the
+   line, nothing is marked.
+
+   NOTHING IS ADDED. This decides where a mark is drawn around text that is
+   already on the page. It cannot invent, move or delete a character, and the
+   preview reads itself back through innerText, which does not see a <b> at
+   all, so an edited page is unaffected by it.
+   ========================================================================= */
+var TT_KW_MARK = { signals: null, terms: [] };
+var TT_KW_MARK_SHARE = 0.5;
+
+function ttPostingTerms() {
+  if (!APP.signals) return [];
+  if (TT_KW_MARK.signals !== APP.signals) {
+    var seen = {}, list = [];
+    (allKeywords() || []).forEach(function (k) {
+      var term = String((k && k.term) || '').trim();
+      if (term.length < 2) return;
+      var key = normalizeToken(term);
+      if (!key || seen[key]) return;
+      seen[key] = 1;
+      list.push(term);
+    });
+    /* Longest first. Otherwise "SAP" would take the mark and leave the rest of
+       "SAP S/4HANA" outside it, which is the split this whole thing avoids. */
+    list.sort(function (a, b) { return b.length - a.length; });
+    TT_KW_MARK = { signals: APP.signals, terms: list };
+  }
+  return TT_KW_MARK.terms;
+}
+
+/* Where in one line the posting's words are. The boundary rule is the one the
+   coverage meter already uses in countTerm, so the meter and the marks can
+   never disagree about whether a term is present. */
+/* Raw positions: every place this line says one of the posting's words. The
+   emphasis switch and the share test do not apply here, because the review
+   check below has to see the term whether or not it is being marked. */
+function keywordRangesRaw(str) {
+  var terms = ttPostingTerms();
+  if (!terms.length) return [];
+  var text = String(str == null ? '' : str);
+  if (!text) return [];
+  var hay = heFold(text.toLowerCase());
+  /* Folding and lower casing are one character for one character in every
+     alphabet this app handles. If some locale ever makes them not, the indices
+     would point at the wrong letters, so nothing is marked at all. */
+  if (hay.length !== text.length) return [];
+
+  var out = [];
+  for (var ti = 0; ti < terms.length; ti++) {
+    var t = heFold(String(terms[ti]).toLowerCase());
+    if (!t || t.length !== terms[ti].length) continue;
+    var from = 0, idx;
+    while ((idx = hay.indexOf(t, from)) !== -1) {
+      from = idx + 1;
+      var endAt = idx + t.length;
+      var after = endAt >= hay.length ? ' ' : hay.charAt(endAt);
+      if (!TT_BOUNDARY_RE.test(after)) continue;
+      /* Back over at most two glued Hebrew prefixes, and a real boundary has
+         to sit behind them. The mark starts at the word, not at the term. */
+      var j = idx, ok = false;
+      for (var k = 0; k <= 2; k++) {
+        var before = j === 0 ? ' ' : hay.charAt(j - 1);
+        if (TT_BOUNDARY_RE.test(before)) { ok = true; break; }
+        if (k < 2 && TT_HE_GLUE.indexOf(before) !== -1) { j--; continue; }
+        break;
+      }
+      if (!ok) continue;
+      var clash = false;
+      for (var o = 0; o < out.length; o++) {
+        if (j < out[o].end && endAt > out[o].start) { clash = true; break; }
+      }
+      if (!clash) out.push({ start: j, end: endAt });
+    }
+  }
+  if (!out.length) return [];
+  out.sort(function (a, b) { return a.start - b.start; });
+
+  return out;
+}
+
+/* What actually gets marked: the raw positions, minus the lines where
+   marking them would turn the whole line bold. */
+function keywordRanges(str) {
+  if (!APP.kwBold) return [];
+  var out = keywordRangesRaw(str);
+  if (!out.length) return [];
+  var text = String(str == null ? '' : str);
+  /* The share test, counted in WORDS rather than in letters. Letters were
+     tried first and were wrong: a short bullet like "Led validation in a
+     GxP environment" is a third of its words and more than half its letters,
+     because the two terms happen to be long ones, and it is exactly the line
+     that should be marked. Words measure what the eye actually counts. */
+  function wordsIn(str) { return String(str).split(/\s+/).filter(Boolean).length; }
+  var markedWords = 0;
+  for (var m = 0; m < out.length; m++) markedWords += wordsIn(text.slice(out[m].start, out[m].end));
+  var totalWords = wordsIn(text);
+  if (!totalWords || markedWords / totalWords > TT_KW_MARK_SHARE) return [];
+  return out;
+}
+
+/* Splits runs the way metricRuns does, and for the same reason: one run per
+   piece is what the docx writer, the print sheet and the screen all consume. */
+function keywordRuns(runs) {
+  if (!APP.kwBold) return runs;
+  var out = [];
+  function push(r, text, bold) {
+    if (!text) return;
+    out.push({ text: text, bold: !!(r.bold || bold), italic: !!r.italic, underline: !!r.underline });
+  }
+  for (var i = 0; i < runs.length; i++) {
+    var r = runs[i], t = String(r.text == null ? '' : r.text);
+    if (!t) { out.push(r); continue; }
+    var rg = keywordRanges(t);
+    if (!rg.length) { out.push(r); continue; }
+    var pos = 0;
+    for (var k = 0; k < rg.length; k++) {
+      push(r, t.slice(pos, rg[k].start), false);
+      push(r, t.slice(rg[k].start, rg[k].end), true);
+      pos = rg[k].end;
+    }
+    push(r, t.slice(pos), false);
+  }
+  return out;
+}
+
+/* The single door every renderer already goes through: the screen page, the
+   preview, the print sheet the pdf is made from, and the docx writer. Adding
+   the pass here is what makes the marks identical in all four. */
+function emphasisRuns(text, cat) {
+  return keywordRuns(emphasisRunsBase(text, cat));
+}
+
+/* How many of the posting's terms the final text actually contains, for the
+   line under the switch. */
+function ttKeywordMarkCount() {
+  var text = String(APP.finalText || '');
+  if (!text || !APP.signals) return 0;
+  var seen = {}, count = 0;
+  text.split(/\n/).forEach(function (line) {
+    keywordRanges(line).forEach(function (r) {
+      var w = normalizeToken(line.slice(r.start, r.end));
+      if (!w || seen[w]) return;
+      seen[w] = 1;
+      count++;
+    });
+  });
+  return count;
 }
 
 /* ---------- WHICH NUMBERS ARE WORTH A READER'S EYE ----------
@@ -8538,6 +8759,19 @@ function ttBankWrite(list) {
   catch (e) { return false; }
 }
 
+/* Removes one record, matched on the pair that identifies it: the question
+   that was asked and the answer that was given. */
+function ttBankForget(entry) {
+  if (!entry) return;
+  var text = String(entry.a || '').trim();
+  if (!text) return;
+  var list = ttBankLoad();
+  var keep = list.filter(function (b) {
+    return !(b && String(b.q || '') === String(entry.q || '') && String(b.a || '').trim() === text);
+  });
+  if (keep.length !== list.length) ttBankWrite(keep);
+}
+
 /* Written as the answer is given, not at the end of the run: a run that is
    abandoned at stage 5 still cost the candidate the typing. */
 function ttBankRemember(entry) {
@@ -10048,8 +10282,29 @@ function ttScriptRepair(askLang, verdict) {
    the first of those means "finished". The other two are errors and are now
    reported as errors, with the run left where it stands so it can be retried
    rather than silently pushed on into the writing stage. */
+/* v39.1. The guard is a second lock on the same door. Whatever calls this,
+   only one turn may be in flight: two overlapping turns write to the same
+   pendingQuestion, and the loser of that race is a question the candidate
+   saw and was never allowed to answer. The flag is cleared in a finally, so
+   a call that throws does not leave the conversation locked. */
 async function askNextQuestion(userMessage) {
   if (APP.chat.done) return;
+  if (APP.chat.asking) {
+    if (window.console) console.warn('TT: a question turn was already in flight, the second call was dropped.');
+    return;
+  }
+  APP.chat.asking = true;
+  try { return await askQuestionTurn(userMessage); }
+  finally {
+    APP.chat.asking = false;
+    /* The last thing askQuestionTurn does is renderChat, and at that moment
+       this flag is still up, so the back button would have been left hidden
+       until some other render happened to come along. */
+    if (typeof ttSyncChatNav === 'function') ttSyncChatNav();
+  }
+}
+
+async function askQuestionTurn(userMessage) {
   if (APP.chat.asked >= APP.chat.max) { finishChat(H('הגענו למכסת השאלות.')); return; }
 
   APP.chat.history.push({ role: 'user', parts: [{ text: userMessage }] });
@@ -10349,6 +10604,204 @@ function finishChat(note) {
   runSynthesis();
 }
 
+
+/* =========================================================================
+   GOING BACK OVER A QUESTION           v39.2
+
+   Two moves, and they are different in what they cost.
+
+   BACK ONE QUESTION is free and loses nothing. The last answer comes out of
+   qa and back into the box, the question it answered becomes the pending one
+   again, and the model history is rewound by exactly that one exchange so the
+   next turn is asked from the same place it was asked from the first time.
+   Without the history rewind the model would see the old answer still standing
+   and would refuse to ask the question again.
+
+   START OVER throws every answer away and rebuilds the gap queue from the
+   analysis that is already in memory. It costs no analysis call: buildQueue
+   and questionBudget are both pure functions of APP.signals and APP.coverage.
+
+   Whatever changes, the match has to change with it. That is not a separate
+   feature, it falls out of where the answers are read: runSynthesis passes
+   APP.chat.qa to every writing call, and the coverage figure is computed from
+   the finished text rather than stored. So a changed answer changes the match
+   the moment the version is rebuilt from it, and the only real risk is a
+   changed answer that is NEVER rebuilt from. Hence the bar on the answers
+   card: it appears on the edit and does not leave until the rebuild.
+   ========================================================================= */
+
+function ttSyncChatNav() {
+  var back = $('btnBackQ');
+  var restart = $('btnRestartQ');
+  var note = $('chatNavNote');
+  var qa = (APP.chat && APP.chat.qa) || [];
+  /* Nothing to go back TO before the first answer, and nothing to go back FROM
+     while the model is writing the next question. */
+  var canBack = !!APP.chat && !APP.chat.done && !APP.chat.asking && qa.length > 0;
+  var canRestart = !!APP.chat && !APP.chat.done && !APP.chat.asking &&
+                   (qa.length > 0 || !!APP.chat.pendingQuestion);
+  if (back) back.classList.toggle('tt-hidden', !canBack);
+  if (restart) restart.classList.toggle('tt-hidden', !canRestart);
+  if (note) note.classList.toggle('tt-hidden', !canRestart);
+}
+
+function stepBackOneQuestion() {
+  if (!APP.chat || APP.chat.done || APP.chat.asking) return;
+  var qa = APP.chat.qa || [];
+  if (!qa.length) return;
+
+  var turns = APP.chat.turns || [];
+
+  /* The closing question is written by the app, not by the model: it never
+     entered the history and never counted against the budget, so it is removed
+     from the screen and from the two flags, and nothing else is undone for it. */
+  if (APP.chat.isClosing) {
+    if (turns.length && turns[turns.length - 1].role === 'model') turns.pop();
+    APP.chat.isClosing = false;
+    APP.chat.closingAsked = false;
+    APP.chat.finishNote = '';
+    APP.chat.pendingQuestion = '';
+    APP.chat.pendingReqId = '';
+    APP.chat.pendingReqIds = [];
+  } else if (APP.chat.pendingQuestion) {
+    /* A real question from the model. It goes off the screen, off the budget
+       and out of the history together with the answer that produced it. */
+    if (turns.length && turns[turns.length - 1].role === 'model') turns.pop();
+    APP.chat.asked = Math.max(0, (APP.chat.asked || 0) - 1);
+    rewindChatTurn();
+    APP.chat.pendingQuestion = '';
+    APP.chat.pendingReqId = '';
+    APP.chat.pendingReqIds = [];
+  }
+
+  /* Now the answer itself: its bubble comes off the screen and its record comes
+     off qa, and the question above it becomes the one being asked again. */
+  if (turns.length && turns[turns.length - 1].role === 'user') turns.pop();
+  var last = qa.pop();
+  /* The answer was written to the bank the moment it was sent, and the bank
+     outlives the run: leaving it there would offer a withdrawn answer back
+     to the candidate in the next posting they tailor for. If the same answer
+     is sent again it is written again, so nothing is lost by removing it. */
+  try { ttBankForget(last); } catch (e) {}
+
+  APP.chat.pendingQuestion = last.q;
+  APP.chat.pendingReqId = last.reqId || '';
+  APP.chat.pendingReqIds = (last.reqIds || []).slice();
+  APP.chat.isClosing = !!last.closing;
+  if (last.closing) APP.chat.closingAsked = true;
+
+  var box = $('chatAnswer');
+  if (box) {
+    box.value = last.skipped ? '' : (last.a || '');
+    if (box.focus) box.focus();
+  }
+  if (typeof clearAnswerSpell === 'function') { try { clearAnswerSpell(); } catch (e) {} }
+
+  var row = $('chatInputRow');
+  if (row) row.classList.remove('tt-hidden');
+  showChatRetry(false);
+  setChatBusy(false);
+  renderChat();
+  renderChatProgress(false);
+  ttSyncChatNav();
+  setStatus(H('חזרת שאלה אחת אחורה. התשובה הקודמת נמצאת בתיבה וניתן לשנות אותה.'));
+}
+
+/* Used by both entry points: the button inside the conversation and the button
+   on the answers card after a version was already written. */
+function restartQuestions() {
+  if (APP.chat && APP.chat.asking) return;
+  if (APP.synthesisRunning) return;
+  var answered = ((APP.chat && APP.chat.qa) || []).filter(function (p) { return !p.skipped; }).length;
+  if (answered && !confirm(H('התחלה מחדש תמחק ') + answered + H(' תשובות שכבר ענית עליהן, והשאלות ייבנו מחדש מהניתוח הקיים.\n\nלהמשיך?'))) return;
+
+  APP.chat = {
+    history: [], turns: [], qa: [], lang: APP.chat.lang, langSeq: APP.chat.langSeq || 0,
+    asked: 0, max: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
+    lastTurnMessage: '', closingAsked: false, isClosing: false, finishNote: '', asking: false
+  };
+  /* The queue is rebuilt rather than reused: it was filtered as answers came in
+     and reusing it would ask only about whatever was left when the run went
+     wrong. Both of these read memory only. */
+  APP.queue = buildQueue();
+  APP.chat.max = questionBudget(APP.queue);
+
+  /* Everything downstream of the answers is now void, and saying so on screen
+     is the whole point: a review list built from deleted answers is worse than
+     no review list. */
+  APP.answerUse = [];
+  APP.changes = [];
+  APP.answersDirty = false;
+  APP.answerEdit = null;
+  hide('answersCard');
+  hide('reviewCard');
+  show('chatCard');
+  setStage(3);
+
+  var box = $('chatAnswer');
+  if (box) box.value = '';
+  if (typeof clearAnswerSpell === 'function') { try { clearAnswerSpell(); } catch (e) {} }
+  var row = $('chatInputRow');
+  if (row) row.classList.remove('tt-hidden');
+  showChatRetry(false);
+  renderChat();
+  renderQueue();
+  renderChatProgress(false);
+  renderAnswerUse();
+  ttSyncChatNav();
+  var card = $('chatCard');
+  if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  askNextQuestion(chatTurnInstruction(APP.chat.lang, true));
+}
+
+/* Editing one answer after the version exists. The answer is changed, the
+   translation that was handed to the writer is dropped so it is made again from
+   the new text, and the run is marked as standing on old ground. */
+function ttAnswerEditOpen(idx) {
+  APP.answerEdit = idx;
+  renderAnswerUse();
+}
+function ttAnswerEditCancel() {
+  APP.answerEdit = null;
+  renderAnswerUse();
+}
+function ttAnswerEditSave(idx) {
+  var box = $('answerEditBox');
+  var qa = (APP.chat && APP.chat.qa) || [];
+  var p = qa[idx];
+  if (!box || !p) { APP.answerEdit = null; renderAnswerUse(); return; }
+  var text = String(box.value || '').trim();
+  APP.answerEdit = null;
+  if (!text || text === String(p.a || '').trim()) { renderAnswerUse(); return; }
+
+  p.a = text;
+  p.skipped = false;
+  p.aForCv = '';
+  p.translateNote = '';
+  /* The screen record of the same answer, so the card shows the new text
+     immediately rather than after the rebuild. */
+  var tag = 'A' + (idx + 1);
+  (APP.answerUse || []).forEach(function (u) { if (u.tag === tag) { u.a = text; u.skipped = false; u.aForCv = ''; } });
+  try { ttBankRemember(p); } catch (e) {}
+  APP.answersDirty = true;
+  renderAnswerUse();
+}
+
+async function rebuildFromAnswers() {
+  if (APP.synthesisRunning) return;
+  var qa = (APP.chat && APP.chat.qa) || [];
+  /* An edited answer lost its translation on purpose. This puts it back before
+     the writer is called, and costs nothing when the answer is already in the
+     language of the resume, which is the ordinary case. */
+  for (var i = 0; i < qa.length; i++) {
+    if (qa[i] && !qa[i].skipped && !qa[i].aForCv) {
+      try { await translateAnswerForResume(qa[i]); } catch (e) {}
+    }
+  }
+  APP.answersDirty = false;
+  await runSynthesis();
+}
+
 /* The hint above is transient and belongs to one keystroke, not to the turn. */
 function ttClearAnswerHint() {
   var hint = $('chatCounter');
@@ -10489,6 +10942,9 @@ function renderChat() {
   var c = $('chatCounter');
   if (c) c.textContent = APP.chat.done ? H('השיחה הסתיימה.') : '';
   renderChatProgress(false);
+  /* v39.2. Every path that changes the conversation ends here, so this is the
+     one place the two navigation buttons have to be told about it. */
+  if (typeof ttSyncChatNav === 'function') ttSyncChatNav();
 }
 
 /* The selector used to mean "from here on", which left the question the
@@ -10888,6 +11344,9 @@ function renderAnswerUse() {
   }
   if (card) card.classList.remove('tt-hidden');
 
+  var bar = $('answersDirtyBar');
+  if (bar) bar.classList.toggle('tt-hidden', !APP.answersDirty);
+
   var used = 0;
   var html = '<div class="space-y-2">';
   APP.answerUse.forEach(function (u) {
@@ -10908,7 +11367,23 @@ function renderAnswerUse() {
           (u.skipped ? H('דילגת') : ok ? H('✓ נכנס ל־') + landed.length + H(' שורות, הן מופיעות כאן למטה') : H('⚠ לא נמצא לו מקום')) + '</span>' +
       '</div>' +
       '<div class="text-xs text-slate-500" dir="' + qDir + '">' + escapeHtml(u.q) + '</div>' +
-      (u.skipped ? '' : '<div class="text-sm mt-0.5" dir="' + aDir + '">' + escapeHtml(u.a) + '</div>') +
+      /* v39.2. The answer, or the box it is being corrected in. One row is
+         open at a time: two open boxes and a rebuild button between them is a
+         way to save the wrong one. */
+      (function () {
+        var idx = parseInt(String(u.tag).replace(/^A/, ''), 10) - 1;
+        if (APP.answerEdit === idx) {
+          return '<textarea id="answerEditBox" rows="3" dir="' + aDir + '" class="w-full border border-slate-300 rounded-lg p-2 text-sm mt-1">' +
+                 escapeHtml(u.a || '') + '</textarea>' +
+                 '<div class="flex gap-2 mt-1">' +
+                   '<button class="tt-btn tt-btn-primary tt-btn-sm" data-tt-answer-save="' + idx + '">' + H('שמור') + '</button>' +
+                   '<button class="tt-btn tt-btn-sm" data-tt-answer-cancel="1">' + H('בטל') + '</button>' +
+                 '</div>';
+        }
+        return (u.skipped ? '' : '<div class="text-sm mt-0.5" dir="' + aDir + '">' + escapeHtml(u.a) + '</div>') +
+               '<div class="mt-1"><button class="tt-btn tt-btn-sm" data-tt-answer-edit="' + idx + '">' +
+                 (u.skipped ? H('✎ ענה על השאלה הזו') : H('✎ ערוך את התשובה')) + '</button></div>';
+      })() +
       // what the writing stage actually received, when the two differ
       (u.aForCv ? '<div class="text-xs text-slate-500 mt-0.5" dir="' + dirForText(u.aForCv, '') + '">' +
         H('נמסר לשלב הכתיבה בשפת קורות החיים: ') + escapeHtml(u.aForCv) + '</div>' : '');
@@ -10935,6 +11410,25 @@ function renderAnswerUse() {
     H('תשובה שסומנה בכתום לא מצאה שורה לשבת בה, והסיבה מופיעה לידה כשהמודל מסר אותה.</p>');
 
   el.innerHTML = head + html;
+
+  /* Bound after every render because innerHTML replaced the buttons that were
+     bound the time before. Nothing accumulates: the old elements are gone. */
+  var els = el.querySelectorAll('[data-tt-answer-edit]');
+  for (var e1 = 0; e1 < els.length; e1++) {
+    (function (b) {
+      b.addEventListener('click', function () { ttAnswerEditOpen(parseInt(b.getAttribute('data-tt-answer-edit'), 10)); });
+    })(els[e1]);
+  }
+  var saves = el.querySelectorAll('[data-tt-answer-save]');
+  for (var e2 = 0; e2 < saves.length; e2++) {
+    (function (b) {
+      b.addEventListener('click', function () { ttAnswerEditSave(parseInt(b.getAttribute('data-tt-answer-save'), 10)); });
+    })(saves[e2]);
+  }
+  var cancels = el.querySelectorAll('[data-tt-answer-cancel]');
+  for (var e3 = 0; e3 < cancels.length; e3++) {
+    cancels[e3].addEventListener('click', ttAnswerEditCancel);
+  }
 }
 
 /* Every text the model returns passes through here. Ids outside the surgeon
@@ -12734,7 +13228,21 @@ async function runPipeline() {
 
 /* Stage 3 onwards, split out so the "no connection" screen has something to
    hand control back to when the candidate says go anyway. */
+/* v39.1. Starting stage 3 wipes APP.chat.qa, so a second start underneath a
+   running conversation destroys answers that were already given. It is now
+   refused rather than trusted to never happen. */
+var TT_STAGE3_STARTING = false;
 async function startQuestions() {
+  if (TT_STAGE3_STARTING) {
+    if (window.console) console.warn('TT: stage 3 is already starting, the second call was dropped.');
+    return;
+  }
+  TT_STAGE3_STARTING = true;
+  try { return await startQuestionsRun(); }
+  finally { TT_STAGE3_STARTING = false; }
+}
+
+async function startQuestionsRun() {
   hide('noRelationCard');
   setStage(3);
   APP.queue = buildQueue();
@@ -13049,10 +13557,36 @@ function renderDomainGate(gap) {
 /* The card stays on screen after the choice, collapsed to one line. It is the
    only place the run says which mode it is in, and the note about the frozen
    comparison table has to survive next to it. */
-function chooseDomainMode(mode) {
-  APP.domainMode = mode === 'broad' ? 'broad' : 'strict';
-  var choice = $('domainChoice');
-  if (choice) choice.classList.add('tt-hidden');
+/* v39.1, THE QUESTION THAT JUMPED.
+
+   This function was on TT_PAINTERS, the list of things a language change
+   replays. It is not a painter. Its last line starts stage 3.
+
+   So changing the interface language in the middle of the conversation
+   replayed the domain choice, which called startQuestions() a second time,
+   underneath the conversation that was already running. That one call did all
+   of this at once: it emptied APP.chat.qa, so answers already given were
+   gone; it reset the question language to the language of the resume; and it
+   fired a second askNextQuestion loop. Two loops then shared one
+   pendingQuestion, so the question on screen was replaced by the other loop's
+   question before it could be answered, and both loops incremented
+   APP.chat.asked against the same budget, so the ceiling was reached in half
+   the questions and finishChat() ran. That is the whole of it: the question
+   jumped, and the resume was built without a single answer.
+
+   The repaint mechanism itself is sound and stays. What was wrong is that one
+   function did two jobs, so the list could not hold only the safe one. The
+   painting moves into renderDomainOut, which is a painter and is on the list,
+   and chooseDomainMode keeps the acting and is on TT_NO_REPLAY. A language
+   change now repaints the sentence and starts nothing.
+
+   Every other name on that list was checked the same way. Two others mention
+   a flow function, updateLangButtons and renderAnswerReuse, and both only
+   bind it to a click, which is what a painter is supposed to do. */
+function renderDomainOut() {
+  /* Nothing to say before a choice has been made, and a replay that runs
+     before one would otherwise print the strict paragraph as if it had. */
+  if (!APP.domainMode) return;
   var el = $('domainOut');
   if (el) {
     el.innerHTML = (APP.domainMode === 'broad'
@@ -13071,6 +13605,13 @@ function chooseDomainMode(mode) {
     var back = $('btnDomainBack');
     if (back) back.addEventListener('click', reopenDomainChoice);
   }
+}
+
+function chooseDomainMode(mode) {
+  APP.domainMode = mode === 'broad' ? 'broad' : 'strict';
+  var choice = $('domainChoice');
+  if (choice) choice.classList.add('tt-hidden');
+  renderDomainOut();
   startQuestions().catch(function (e) {
     showError(H('ההרצה נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
   });
@@ -13101,9 +13642,18 @@ function reopenDomainChoice() {
     lastTurnMessage: '', closingAsked: false, isClosing: false, finishNote: ''
   };
   APP.queue = [];
+  /* v39.1. Two leftovers from the state this function resets.
+     renderChatLog has never existed in this file, so the typeof guard made the
+     line a no op and the previous conversation stayed on screen under a chat
+     object that had just been emptied: questions visible, nothing behind them.
+     The function that draws that panel is renderChat, and with turns now empty
+     it clears it. The chosen paragraph is cleared for the same reason, since
+     the choice it describes has just been withdrawn. */
+  var domOut = $('domainOut');
+  if (domOut) domOut.innerHTML = '';
   if (typeof showChatRetry === 'function') showChatRetry(false);
   hide('chatCard');
-  if (typeof renderChatLog === 'function') renderChatLog();
+  if (typeof renderChat === 'function') renderChat();
   if (typeof renderChatProgress === 'function') renderChatProgress();
 
   var gap = (typeof domainGapReport === 'function') ? domainGapReport() : null;
@@ -13152,6 +13702,18 @@ function renderQueue() {
 function bindStageUi() {
   $('btnSendAnswer').addEventListener('click', function () { submitAnswer(false); });
   $('btnSkipQ').addEventListener('click', function () { submitAnswer(true); });
+  var backQ = $('btnBackQ');
+  if (backQ) backQ.addEventListener('click', stepBackOneQuestion);
+  var restartQ = $('btnRestartQ');
+  if (restartQ) restartQ.addEventListener('click', restartQuestions);
+  var restartA = $('btnRestartFromAnswers');
+  if (restartA) restartA.addEventListener('click', restartQuestions);
+  var rebuildA = $('btnRebuildFromAnswers');
+  if (rebuildA) rebuildA.addEventListener('click', function () {
+    rebuildFromAnswers().catch(function (e) {
+      showError(H('הבנייה מחדש נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
+    });
+  });
   $('btnDoneQ').addEventListener('click', function () {
     /* Typed and unsent is the one thing here that cannot be recovered: the
        question is recorded as skipped either way, but the words in the box are
@@ -15690,6 +16252,36 @@ function answerTagsForLine(lineId) {
   return tags;
 }
 
+/* =========================================================================
+   WHERE THE POSTING'S WORD SITS IN THE LINE          v39.3
+
+   The writing brief already tells the model to move a buried achievement to
+   the front of its bullet. Every other rule in this file is checked in the
+   browser against the document rather than trusted to the prompt, and this
+   one was the exception. It is checked now, and only reported: a recruiter
+   scanning a page reads the first few words of each bullet and little else,
+   so a line whose one matching term sits at word nine is a line that is
+   carrying its own point too far back. What to do about it stays with the
+   candidate, like every other judgement on this screen. */
+var TT_LATE_TERM_AT = 6;
+
+function ttLateTermNote(ch) {
+  if (!ch || (ch.kind !== 'line' && ch.kind !== 'add')) return '';
+  var text = String(ch.after || '');
+  if (!text) return '';
+  var rg = keywordRangesRaw(text);
+  if (!rg.length) return '';
+  /* Words before the first one, counted on the text itself so a bullet glyph
+     or a leading dash is not mistaken for a word. */
+  var before = text.slice(0, rg[0].start).replace(/[^\w\u0590-\u05FF]+/g, ' ').trim();
+  var at = before ? before.split(/\s+/).length + 1 : 1;
+  if (at < TT_LATE_TERM_AT) return '';
+  return '<div class="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">' +
+    H('מונח המשרה בשורה הזו מופיע רק במילה ה') + at +
+    H('. סורק קורא את תחילת השורה, ולכן שורה שפותחת במונח נתפסת מהר יותר. אפשר לערוך את השורה כאן.') +
+    '</div>';
+}
+
 function renderChangeCard(ch) {
   var on = ch.status === 'approved';
   var dir = dirForText(ch.after || ch.before, ch.lang);
@@ -15797,6 +16389,7 @@ function renderChangeCard(ch) {
       '</div>' +
     '</div>' +
     '<div class="text-sm" dir="' + dir + '">' + body + '</div>' +
+    ttLateTermNote(ch) +
     '<div class="tt-ch-editor tt-hidden mt-2">' +
       '<textarea class="w-full border border-slate-300 rounded-lg p-2 text-sm tt-line" rows="3" dir="' + dir + '">' + escapeHtml(ch.after) + '</textarea>' +
       H('<div class="flex gap-2 mt-1"><button class="tt-ch-act text-xs px-2 py-1 rounded bg-blue-600 text-white" data-act="save">שמור</button>') +
@@ -16919,6 +17512,16 @@ var TT_I18N = (function () {
   put('voice.err_final', null, ['התמלול לא הצליח. אפשר להקליט שוב, או פשוט לכתוב את התשובה.', 'فشل التفريغ. يمكنك التسجيل مرة أخرى، أو ببساطة كتابة الإجابة.', 'The transcription failed. You can record again, or simply type the answer.', 'La transcription a échoué. Vous pouvez réenregistrer, ou simplement écrire la réponse.', 'La transcripción falló. Puedes grabar de nuevo, o simplemente escribir la respuesta.', 'Die Transkription ist fehlgeschlagen. Sie können erneut aufnehmen oder die Antwort einfach eintippen.', 'La trascrizione non è riuscita. Puoi registrare di nuovo, oppure scrivere la risposta.', 'A transcrição falhou. Você pode gravar de novo, ou simplesmente digitar a resposta.', 'Prepisivanje nije uspjelo. Možete snimiti ponovno ili jednostavno upisati odgovor.', 'Расшифровка не удалась. Можно записать заново или просто напечатать ответ.', '文字起こしに失敗しました。録音し直すか、回答を入力してください。', 'लेखन विफल रहा। आप फिर रिकॉर्ड कर सकते हैं, या उत्तर टाइप कर सकते हैं।']);
   put('voice.err_nokey', null, ['צריך מפתח API כדי לתמלל. פתח את ההגדרות והזן מפתח.', 'يلزم مفتاح API للتفريغ. افتح الإعدادات وأدخل مفتاحًا.', 'An API key is needed to transcribe. Open the settings and enter a key.', 'Une clé API est nécessaire pour transcrire. Ouvrez les paramètres et saisissez une clé.', 'Se necesita una clave de API para transcribir. Abre la configuración e introduce una clave.', 'Zum Transkribieren wird ein API-Schlüssel benötigt. Öffnen Sie die Einstellungen und geben Sie einen Schlüssel ein.', 'Serve una chiave API per trascrivere. Apri le impostazioni e inserisci una chiave.', 'É preciso uma chave de API para transcrever. Abra as configurações e insira uma chave.', 'Za prepisivanje je potreban API ključ. Otvorite postavke i unesite ključ.', 'Для расшифровки нужен ключ API. Откройте настройки и введите ключ.', '文字起こしには API キーが必要です。設定を開いてキーを入力してください。', 'लिखने के लिए API कुंजी चाहिए। सेटिंग्स खोलकर कुंजी दर्ज करें।']);
 
+  /* ---- going back over a question, v39.2 --------------------------------- */
+  put('btn.back_q', '#btnBackQ', ['↩ חזור לשאלה הקודמת', '↩ ارجع إلى السؤال السابق', '↩ Back to the previous question', '↩ Revenir à la question précédente', '↩ Volver a la pregunta anterior', '↩ Zurück zur vorherigen Frage', '↩ Torna alla domanda precedente', '↩ Voltar à pergunta anterior', '↩ Natrag na prethodno pitanje', '↩ Назад к предыдущему вопросу', '↩ 前の質問に戻る', '↩ पिछले प्रश्न पर लौटें']);
+  put('btn.restart_q', '#btnRestartQ', ['↻ התחל את כל השאלות מחדש', '↻ ابدأ كل الأسئلة من جديد', '↻ Start all the questions over', '↻ Recommencer toutes les questions', '↻ Empezar todas las preguntas de nuevo', '↻ Alle Fragen neu beginnen', '↻ Ricomincia tutte le domande', '↻ Recomeçar todas as perguntas', '↻ Počni sva pitanja ispočetka', '↻ Начать все вопросы заново', '↻ 質問を最初からやり直す', '↻ सभी प्रश्न फिर से शुरू करें']);
+  put('chat.nav_note', '#chatNavNote', ['חזרה אחורה מחזירה גם את התשובה שכתבת. התחלה מחדש מוחקת את כל התשובות.', 'الرجوع يعيد أيضًا الإجابة التي كتبتها. البدء من جديد يحذف كل الإجابات.', 'Going back brings your answer back with it. Starting over deletes every answer.', 'Revenir en arrière ramène aussi votre réponse. Recommencer supprime toutes les réponses.', 'Volver atrás recupera también tu respuesta. Empezar de nuevo borra todas las respuestas.', 'Ein Schritt zurück bringt Ihre Antwort mit. Ein Neustart löscht alle Antworten.', 'Tornare indietro riporta anche la tua risposta. Ricominciare cancella tutte le risposte.', 'Voltar traz de volta a sua resposta. Recomeçar apaga todas as respostas.', 'Povratak vraća i vaš odgovor. Novi početak briše sve odgovore.', 'Возврат вернёт и ваш ответ. Начать заново удалит все ответы.', '戻ると入力した回答も戻ります。やり直すと回答はすべて削除されます。', 'पीछे जाने पर आपका उत्तर भी लौट आता है। फिर से शुरू करने पर सभी उत्तर मिट जाते हैं।']);
+  put('answers.dirty', '#answersDirtyText', ['תשובה השתנתה. הגרסה ואחוז ההתאמה עדיין בנויים על התשובה הקודמת.', 'تغيّرت إجابة. النسخة ونسبة المطابقة ما زالتا مبنيتين على الإجابة السابقة.', 'An answer changed. The version and the match figure are still built on the previous one.', 'Une réponse a changé. La version et le taux de correspondance reposent encore sur la précédente.', 'Una respuesta cambió. La versión y el porcentaje de coincidencia siguen basados en la anterior.', 'Eine Antwort hat sich geändert. Version und Übereinstimmungswert beruhen noch auf der vorherigen.', 'Una risposta è cambiata. La versione e la percentuale di corrispondenza si basano ancora sulla precedente.', 'Uma resposta mudou. A versão e a porcentagem de correspondência ainda se baseiam na anterior.', 'Odgovor je promijenjen. Verzija i postotak podudarnosti još se temelje na prethodnom.', 'Ответ изменился. Версия и процент соответствия всё ещё построены на прежнем.', '回答が変わりました。作成済みの版と一致率はまだ以前の回答に基づいています。', 'एक उत्तर बदला है। संस्करण और मिलान प्रतिशत अब भी पिछले उत्तर पर आधारित हैं।']);
+  put('btn.rebuild_answers', '#btnRebuildFromAnswers', ['בנה מחדש מהתשובות', 'أعد البناء من الإجابات', 'Rebuild from the answers', 'Reconstruire à partir des réponses', 'Reconstruir a partir de las respuestas', 'Aus den Antworten neu erstellen', 'Ricostruisci dalle risposte', 'Reconstruir a partir das respostas', 'Ponovno izgradi iz odgovora', 'Пересобрать по ответам', '回答から作り直す', 'उत्तरों से दोबारा बनाएँ']);
+  put('btn.restart_from_answers', '#btnRestartFromAnswers', ['↻ חזור לשאלות והתחל אותן מחדש', '↻ ارجع إلى الأسئلة وابدأها من جديد', '↻ Go back to the questions and start them over', '↻ Revenir aux questions et les recommencer', '↻ Volver a las preguntas y empezarlas de nuevo', '↻ Zurück zu den Fragen und neu beginnen', '↻ Torna alle domande e ricominciale', '↻ Voltar às perguntas e recomeçá-las', '↻ Vrati se na pitanja i počni ih ispočetka', '↻ Вернуться к вопросам и начать их заново', '↻ 質問に戻って最初からやり直す', '↻ प्रश्नों पर लौटें और फिर से शुरू करें']);
+
+  put('toggle.kw_bold', '#kwBoldToggleLabel', ['הדגשת מונחים שמופיעים גם במודעה וגם בקורות החיים', 'إبراز المصطلحات الواردة في الإعلان وفي السيرة الذاتية معًا', 'Bold the terms that appear in both the posting and the resume', 'Mettre en gras les termes présents à la fois dans l\'annonce et dans le CV', 'Resaltar en negrita los términos que aparecen en la oferta y en el currículum', 'Begriffe fett setzen, die sowohl in der Anzeige als auch im Lebenslauf stehen', 'Metti in grassetto i termini presenti sia nell\'annuncio sia nel CV', 'Colocar em negrito os termos que aparecem no anúncio e no currículo', 'Podebljaj pojmove koji se pojavljuju i u oglasu i u životopisu', 'Выделить жирным термины, которые есть и в вакансии, и в резюме', '求人と履歴書の両方にある用語を太字にする', 'उन शब्दों को बोल्ड करें जो विज्ञापन और बायोडाटा दोनों में हैं']);
+
   /* ---- brand and chrome -------------------------------------------------- */
   put('brand.sub', '.tt-brandsub', [
     'התאמת קורות חיים למשרה, בלי להמציא כלום',
@@ -17866,6 +18469,24 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+/* ---- where the posting's word sits in the line, v39.3 ---- */
+'מונח המשרה בשורה הזו מופיע רק במילה ה':['مصطلح الإعلان في هذا السطر لا يظهر إلا في الكلمة رقم ','The posting\'s term in this line only appears at word ','Le terme de l\'annonce n\'apparaît dans cette ligne qu\'au mot ','El término de la oferta solo aparece en esta línea en la palabra ','Der Begriff der Anzeige steht in dieser Zeile erst an Wort ','Il termine dell\'annuncio in questa riga compare solo alla parola ','O termo do anúncio nesta linha só aparece na palavra ','Pojam iz oglasa u ovom retku pojavljuje se tek na riječi ','Термин из вакансии в этой строке появляется только на слове ','この行では求人の用語が ','इस पंक्ति में विज्ञापन का शब्द केवल शब्द '],
+'. סורק קורא את תחילת השורה, ולכן שורה שפותחת במונח נתפסת מהר יותר. אפשר לערוך את השורה כאן.':['. القارئ السريع يقرأ بداية السطر، لذا السطر الذي يبدأ بالمصطلح يُلتقط أسرع. يمكنك تحرير السطر هنا.','. A scanner reads the start of a line, so a line that opens with the term is caught faster. You can edit the line here.','. Un lecteur rapide lit le début de la ligne, donc une ligne qui commence par le terme est repérée plus vite. Vous pouvez modifier la ligne ici.','. Quien escanea lee el inicio de la línea, así que una línea que empieza con el término se capta antes. Puedes editar la línea aquí.','. Wer überfliegt, liest den Zeilenanfang, deshalb wird eine Zeile, die mit dem Begriff beginnt, schneller erfasst. Sie können die Zeile hier bearbeiten.','. Chi scorre legge l\'inizio della riga, quindi una riga che apre con il termine viene colta prima. Puoi modificare la riga qui.','. Quem passa os olhos lê o início da linha, então uma linha que começa com o termo é notada antes. Você pode editar a linha aqui.','. Onaj tko preleti čita početak retka, pa se redak koji počinje pojmom brže uoči. Redak možete urediti ovdje.','. Читающий бегло смотрит начало строки, поэтому строка, начинающаяся с термина, замечается быстрее. Строку можно отредактировать здесь.',' 語目にしか出てきません。ざっと読む人は行頭を読むため、用語で始まる行のほうが速く目に留まります。ここで行を編集できます。','। से ही आता है। सरसरी नज़र पंक्ति की शुरुआत पढ़ती है, इसलिए शब्द से शुरू होने वाली पंक्ति जल्दी पकड़ में आती है। आप पंक्ति यहाँ संपादित कर सकते हैं।'],
+/* ---- keyword emphasis, v39.3 ---- */
+'כבוי':['مُطفأ','Off','Désactivé','Desactivado','Aus','Disattivato','Desligado','Isključeno','Выключено','オフ','बंद'],
+' מונחים מודגשים':[' مصطلحات مُبرزة',' terms in bold',' termes en gras',' términos en negrita',' Begriffe fett',' termini in grassetto',' termos em negrito',' pojmova podebljano',' терминов выделено',' 語を太字',' शब्द बोल्ड'],
+'אין מונחים משותפים להדגיש':['لا توجد مصطلحات مشتركة لإبرازها','No shared terms to bold','Aucun terme commun à mettre en gras','No hay términos comunes para resaltar','Keine gemeinsamen Begriffe zum Hervorheben','Nessun termine comune da evidenziare','Não há termos em comum para destacar','Nema zajedničkih pojmova za isticanje','Нет общих терминов для выделения','太字にできる共通の用語はありません','बोल्ड करने के लिए कोई साझा शब्द नहीं'],
+'ההדגשה הופעלה. היא נכנסת גם לקובץ שיורד.':['فُعّل الإبراز، وهو يظهر أيضًا في الملف الذي يُنزَّل.','Emphasis is on. It goes into the downloaded file as well.','La mise en valeur est activée. Elle figure aussi dans le fichier téléchargé.','El resaltado está activado. También aparece en el archivo descargado.','Die Hervorhebung ist aktiv. Sie steht auch in der heruntergeladenen Datei.','L\'evidenziazione è attiva. Compare anche nel file scaricato.','O destaque está ativado. Ele também vai para o arquivo baixado.','Isticanje je uključeno. Ulazi i u preuzetu datoteku.','Выделение включено. Оно попадает и в скачиваемый файл.','強調をオンにしました。ダウンロードするファイルにも入ります。','हाइलाइट चालू है। यह डाउनलोड फ़ाइल में भी जाता है।'],
+'ההדגשה כובתה.':['أُطفئ الإبراز.','Emphasis is off.','La mise en valeur est désactivée.','El resaltado está desactivado.','Die Hervorhebung ist aus.','L\'evidenziazione è disattivata.','O destaque está desligado.','Isticanje je isključeno.','Выделение выключено.','強調をオフにしました。','हाइलाइट बंद है।'],
+/* ---- going back over a question, v39.2 ---- */
+'שמור':['احفظ','Save','Enregistrer','Guardar','Speichern','Salva','Salvar','Spremi','Сохранить','保存','सहेजें'],
+'בטל':['إلغاء','Cancel','Annuler','Cancelar','Abbrechen','Annulla','Cancelar','Odustani','Отмена','キャンセル','रद्द करें'],
+'✎ ערוך את התשובה':['✎ عدّل الإجابة','✎ Edit the answer','✎ Modifier la réponse','✎ Editar la respuesta','✎ Antwort bearbeiten','✎ Modifica la risposta','✎ Editar a resposta','✎ Uredi odgovor','✎ Изменить ответ','✎ 回答を編集','✎ उत्तर संपादित करें'],
+'✎ ענה על השאלה הזו':['✎ أجب عن هذا السؤال','✎ Answer this question','✎ Répondre à cette question','✎ Responder a esta pregunta','✎ Diese Frage beantworten','✎ Rispondi a questa domanda','✎ Responder a esta pergunta','✎ Odgovori na ovo pitanje','✎ Ответить на этот вопрос','✎ この質問に答える','✎ इस प्रश्न का उत्तर दें'],
+'חזרת שאלה אחת אחורה. התשובה הקודמת נמצאת בתיבה וניתן לשנות אותה.':['رجعتَ سؤالًا واحدًا. الإجابة السابقة في المربّع ويمكن تعديلها.','You went back one question. The previous answer is in the box and can be changed.','Vous êtes revenu d\'une question. La réponse précédente est dans le champ et peut être modifiée.','Has vuelto una pregunta atrás. La respuesta anterior está en el cuadro y puedes cambiarla.','Sie sind eine Frage zurückgegangen. Die vorherige Antwort steht im Feld und kann geändert werden.','Sei tornato indietro di una domanda. La risposta precedente è nel campo e può essere modificata.','Você voltou uma pergunta. A resposta anterior está no campo e pode ser alterada.','Vratili ste se jedno pitanje unatrag. Prethodni odgovor je u polju i može se promijeniti.','Вы вернулись на один вопрос назад. Предыдущий ответ в поле, его можно изменить.','質問を一つ戻りました。前の回答が入力欄にあり、変更できます。','आप एक प्रश्न पीछे लौटे। पिछला उत्तर बॉक्स में है और बदला जा सकता है।'],
+'התחלה מחדש תמחק ':['ستحذف البداية من جديد ','Starting over will delete ','Recommencer supprimera ','Empezar de nuevo borrará ','Ein Neustart löscht ','Ricominciare cancellerà ','Recomeçar apagará ','Novi početak izbrisat će ','Начать заново удалит ','やり直すと ','फिर से शुरू करने पर '],
+' תשובות שכבר ענית עליהן, והשאלות ייבנו מחדש מהניתוח הקיים.\n\nלהמשיך?':[' إجابات قدّمتها بالفعل، وستُبنى الأسئلة من جديد من التحليل الحالي.\n\nهل تريد المتابعة؟',' answers you already gave, and the questions will be rebuilt from the analysis already in memory.\n\nContinue?',' réponses déjà données, et les questions seront reconstruites à partir de l\'analyse déjà en mémoire.\n\nContinuer ?',' respuestas que ya diste, y las preguntas se reconstruirán a partir del análisis que ya está en memoria.\n\n¿Continuar?',' bereits gegebene Antworten, und die Fragen werden aus der vorhandenen Analyse neu aufgebaut.\n\nFortfahren?',' risposte già date, e le domande saranno ricostruite dall\'analisi già in memoria.\n\nContinuare?',' respostas que você já deu, e as perguntas serão reconstruídas a partir da análise já em memória.\n\nContinuar?',' odgovora koje ste već dali, a pitanja će se ponovno izgraditi iz postojeće analize.\n\nNastaviti?',' уже данных ответов, а вопросы будут построены заново из имеющегося анализа.\n\nПродолжить?','件のこれまでの回答が削除され、質問は既存の分析から作り直されます。\n\n続けますか。',' उत्तर मिट जाएँगे जो आपने दिए हैं, और प्रश्न मौजूदा विश्लेषण से दोबारा बनेंगे।\n\nजारी रखें?'],
+'הבנייה מחדש נעצרה בגלל שגיאה: ':['توقّفت إعادة البناء بسبب خطأ: ','The rebuild stopped because of an error: ','La reconstruction s\'est arrêtée à cause d\'une erreur : ','La reconstrucción se detuvo por un error: ','Die Neuerstellung wurde wegen eines Fehlers abgebrochen: ','La ricostruzione si è fermata per un errore: ','A reconstrução parou por causa de um erro: ','Ponovna izgradnja zaustavljena je zbog pogreške: ','Пересборка остановлена из-за ошибки: ','エラーのため作り直しを中止しました: ','त्रुटि के कारण पुनर्निर्माण रुक गया: '],
 'המדידה לא בוצעה, כי אף מודל לא ענה. בדוק את חיבור האינטרנט ואת המפתח בהגדרות, ונסה שוב.':['لم يُجرَ القياس لأن أيّ نموذج لم يستجب. تحقّق من اتصال الإنترنت ومن المفتاح في الإعدادات، ثم حاول مجددًا.','The measurement did not run, because no model answered. Check your internet connection and the key in settings, then try again.','La mesure n’a pas été effectuée : aucun modèle n’a répondu. Vérifiez votre connexion et la clé dans les paramètres, puis réessayez.','La medición no se realizó porque ningún modelo respondió. Comprueba tu conexión y la clave en ajustes, y vuelve a intentarlo.','Die Messung wurde nicht durchgeführt, weil kein Modell geantwortet hat. Prüfen Sie Ihre Internetverbindung und den Schlüssel in den Einstellungen und versuchen Sie es erneut.','La misurazione non è stata eseguita perché nessun modello ha risposto. Controlla la connessione e la chiave nelle impostazioni, poi riprova.','A medição não foi feita porque nenhum modelo respondeu. Verifique sua conexão e a chave nas configurações e tente de novo.','Mjerenje nije provedeno jer nijedan model nije odgovorio. Provjerite internetsku vezu i ključ u postavkama pa pokušajte ponovno.','Измерение не выполнено: ни одна модель не ответила. Проверьте подключение и ключ в настройках и попробуйте снова.','どのモデルも応答しなかったため、測定は実行されませんでした。インターネット接続と設定内のキーを確認して、もう一度お試しください。','माप नहीं हुआ, क्योंकि किसी मॉडल ने उत्तर नहीं दिया। अपना इंटरनेट कनेक्शन और सेटिंग्स में कुंजी जाँचें, फिर पुनः प्रयास करें।'],
 'המדידה לא בוצעה, כי המודל הראשי לא היה זמין. זו כמעט תמיד מכסה שנגמרה: המתן דקה והתחל את ההתאמה שוב. מדידה על מודל גיבוי הייתה נותנת מספר אחר, שאי אפשר להשוות אותו לריצות אחרות.':['لم يُجرَ القياس لأن النموذج الأساسي لم يكن متاحًا. هذا في الغالب نفاد الحصة: انتظر دقيقة وابدأ الملاءمة من جديد. القياس بنموذج احتياطي كان سيعطي رقمًا آخر لا يمكن مقارنته بتشغيلات أخرى.','The measurement did not run, because the main model was unavailable. That is nearly always an exhausted quota: wait a minute and start the tailoring again. Measuring on a backup model would have produced a different number that cannot be compared with other runs.','La mesure n’a pas été effectuée : le modèle principal n’était pas disponible. C’est presque toujours un quota épuisé. Attendez une minute et relancez l’adaptation. Mesurer avec un modèle de secours aurait donné un autre chiffre, incomparable avec les autres exécutions.','La medición no se realizó porque el modelo principal no estaba disponible. Casi siempre es una cuota agotada: espera un minuto y vuelve a empezar la adaptación. Medir con un modelo de respaldo habría dado otro número, no comparable con otras ejecuciones.','Die Messung wurde nicht durchgeführt, weil das Hauptmodell nicht verfügbar war. Fast immer ist das ein aufgebrauchtes Kontingent: Warten Sie eine Minute und starten Sie die Anpassung erneut. Eine Messung mit einem Ersatzmodell hätte eine andere Zahl ergeben, die mit anderen Läufen nicht vergleichbar ist.','La misurazione non è stata eseguita perché il modello principale non era disponibile. Quasi sempre è una quota esaurita: attendi un minuto e riavvia l’adattamento. Misurare con un modello di riserva avrebbe dato un numero diverso, non confrontabile con le altre esecuzioni.','A medição não foi feita porque o modelo principal não estava disponível. Quase sempre é cota esgotada: espere um minuto e inicie a adaptação de novo. Medir em um modelo reserva teria produzido outro número, não comparável com outras execuções.','Mjerenje nije provedeno jer glavni model nije bio dostupan. Gotovo uvijek je riječ o potrošenoj kvoti: pričekajte minutu i ponovno pokrenite prilagodbu. Mjerenje na pričuvnom modelu dalo bi drugi broj koji se ne može usporediti s drugim pokretanjima.','Измерение не выполнено: основная модель была недоступна. Почти всегда это исчерпанная квота — подождите минуту и запустите адаптацию снова. Измерение на резервной модели дало бы другое число, несопоставимое с другими запусками.','主モデルが利用できなかったため、測定は実行されませんでした。ほとんどの場合は利用枠の超過です。1 分ほど待ってから調整をやり直してください。予備モデルで測ると別の数値になり、他の実行と比較できません。','माप नहीं हुआ, क्योंकि मुख्य मॉडल उपलब्ध नहीं था। यह लगभग हमेशा सीमा समाप्त होने का मामला है: एक मिनट रुककर अनुकूलन फिर से शुरू करें। बैकअप मॉडल पर मापने से अलग अंक आता, जिसकी तुलना अन्य रन से नहीं की जा सकती।'],
 'העתק פרטי מדידה':['انسخ تفاصيل القياس','Copy measurement details','Copier les détails de la mesure','Copiar detalles de la medición','Messdetails kopieren','Copia i dettagli della misurazione','Copiar detalhes da medição','Kopiraj detalje mjerenja','Скопировать детали измерения','測定の詳細をコピー','माप विवरण कॉपी करें'],
@@ -18753,14 +19374,15 @@ var TT_PAINTERS = ['aboutNote','applyUiLang','bindStructurePanel','buildUiLangMe
   'renderFitBiasPicker','renderGrammarPanel','renderInterviewSheet','renderKeywords',
   'renderMatchVerdict','renderNoRelation','renderPreview','renderProgress','renderQueue',
   'renderReview','renderSignals','renderSpellNotice','renderStructurePanel',
-  'renderTemplatePicker','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','renderAnswerReuse','setChatBusy','setConsole','setFinalView','setKeyStatus',
+  'renderTemplatePicker','renderDomainOut','renderFitDelta','renderKeyProblem','renderAnalysisLangBar','renderCvVault','renderFitGate','renderAnswerReuse','setChatBusy','setConsole','setFinalView','setKeyStatus',
   'setStage','setStatus','showNotice','syncBulletToggle','ttRenderLangBadge',
   'ttShareNote','updateLangButtons','renderVoice'];
 
 /* applyUiLang and buildUiLangMenu are in the list above only so that nothing
    has to remember to keep two lists in step; they are skipped when replaying,
    because replaying the thing that triggers the replay is a loop. */
-var TT_NO_REPLAY = { applyUiLang: 1, buildUiLangMenu: 1, ttRenderLangBadge: 1 };
+var TT_NO_REPLAY = { applyUiLang: 1, buildUiLangMenu: 1, ttRenderLangBadge: 1,
+                     chooseDomainMode: 1 };
 
 var TT_LAST_PAINT = {};
 
@@ -19782,6 +20404,17 @@ function copyInterviewSheet() {
    back; this switch is the manual override, over the experience, additional
    and skills sections. The summary stays prose either way. */
 function syncBulletToggle(doc) {
+  /* v39.3. The keyword switch is synced from here because this is the
+     function the preview already calls, and it is already replayed on a
+     language change with the rest of the painters. */
+  var kw = $('kwBoldToggle');
+  if (kw) kw.checked = !!APP.kwBold;
+  var kwNote = $('kwBoldNote');
+  if (kwNote) {
+    var marked = APP.kwBold ? ttKeywordMarkCount() : 0;
+    kwNote.textContent = !APP.kwBold ? H('כבוי') :
+      marked ? marked + H(' מונחים מודגשים') : H('אין מונחים משותפים להדגיש');
+  }
   var box = $('bulletToggle');
   if (!box) return;
   var st = bulletState(doc);
@@ -19914,6 +20547,13 @@ function bindPreviewUi() {
   var apply = $('btnApplyPreview');
   if (apply) apply.addEventListener('click', function () { clearError(); applyPreviewEdits(); });
 
+  var kwBox = $('kwBoldToggle');
+  if (kwBox) kwBox.addEventListener('change', function () {
+    APP.kwBold = !!kwBox.checked;
+    renderPreview();
+    setStatus(APP.kwBold ? H('ההדגשה הופעלה. היא נכנסת גם לקובץ שיורד.')
+                         : H('ההדגשה כובתה.'));
+  });
   var bullets = $('bulletToggle');
   if (bullets) bullets.addEventListener('change', function (ev) { toggleBullets(ev.currentTarget.checked); });
 
@@ -20930,12 +21570,17 @@ function ttVoiceClock(ms) {
 function renderVoice() {
   var bar = $('voiceBar');
   var lab = $('voiceBtnLabel');
-  if (lab) lab.innerHTML = TT_VOICE.state === 'rec' ? escapeHtml(T('voice.recording')) : T('btn.voice_rec');
+  /* Written only when it actually differs. This ran on every tick as well. */
+  if (lab) {
+    var labWant = TT_VOICE.state === 'rec' ? escapeHtml(T('voice.recording')) : T('btn.voice_rec');
+    if (lab.innerHTML !== labWant) lab.innerHTML = labWant;
+  }
   ttVoiceSync();
   if (!bar) return;
 
   if (TT_VOICE.state === 'idle' && !TT_VOICE.msg) {
     bar.classList.add('tt-hidden');
+    bar.removeAttribute('data-tt-voice');
     bar.innerHTML = '';
     return;
   }
@@ -20946,18 +21591,50 @@ function renderVoice() {
     var over = TT_VOICE.elapsed >= TT_VOICE_WARN_MS;
     var pct = Math.max(0, Math.min(100, Math.round(TT_VOICE.level * 100)));
     bar.className = 'tt-voicebar is-rec';
-    bar.innerHTML =
-      '<span class="tt-voicelive"><span class="tt-voicepulse"></span>' +
-        escapeHtml(T('voice.recording')) + '</span>' +
-      '<span class="tt-voiceclock' + (over ? ' is-warn' : '') + '">' +
-        ttVoiceClock(TT_VOICE.elapsed) + ' / ' + ttVoiceClock(TT_VOICE_MAX_MS) + '</span>' +
-      '<span class="tt-voicemeter"><i style="width:' + pct + '%"></i></span>' +
-      '<button type="button" id="btnVoiceStop" class="tt-btn tt-btn-sm tt-btn-ok">' +
-        escapeHtml(T('voice.stop')) + '</button>' +
-      '<button type="button" id="btnVoiceCancel" class="tt-btn tt-btn-sm">' +
-        escapeHtml(T('voice.cancel')) + '</button>';
+
+    /* v39.3, WHY STOP AND CANCEL DID NOTHING.
+
+       While a recording runs, the tick fires every 120 ms and every tick used
+       to rewrite this whole bar through innerHTML. A browser only fires a
+       click when mousedown and mouseup land on THE SAME element, and an
+       ordinary press lasts longer than 120 ms, so between pressing and
+       releasing the button was destroyed and a new one built in its place.
+       Neither button was broken and the delegation on the bar was correct: no
+       click event was ever generated to delegate. The microphone button kept
+       working the whole time because it is static markup that nothing
+       rewrites, which is exactly why pressing it again was the only way to
+       stop.
+
+       So the bar is built ONCE per recording and the tick now writes only the
+       two things that actually change, the clock and the meter, into elements
+       that stay where they are. The language is part of the marker because a
+       language change mid recording has to rebuild the labels, and that is the
+       one case where a rebuild is right. */
+    var want = 'rec:' + TT_UI_LANG;
+    if (bar.getAttribute('data-tt-voice') !== want) {
+      bar.setAttribute('data-tt-voice', want);
+      bar.innerHTML =
+        '<span class="tt-voicelive"><span class="tt-voicepulse"></span>' +
+          escapeHtml(T('voice.recording')) + '</span>' +
+        '<span class="tt-voiceclock"></span>' +
+        '<span class="tt-voicemeter"><i style="width:0%"></i></span>' +
+        '<button type="button" id="btnVoiceStop" class="tt-btn tt-btn-sm tt-btn-ok">' +
+          escapeHtml(T('voice.stop')) + '</button>' +
+        '<button type="button" id="btnVoiceCancel" class="tt-btn tt-btn-sm">' +
+          escapeHtml(T('voice.cancel')) + '</button>';
+    }
+    var clock = bar.querySelector('.tt-voiceclock');
+    if (clock) {
+      clock.textContent = ttVoiceClock(TT_VOICE.elapsed) + ' / ' + ttVoiceClock(TT_VOICE_MAX_MS);
+      clock.classList.toggle('is-warn', over);
+    }
+    var meter = bar.querySelector('.tt-voicemeter i');
+    if (meter) meter.style.width = pct + '%';
     return;
   }
+  /* Every path below rebuilds the bar, so the marker is dropped and the next
+     recording builds itself from scratch. */
+  bar.removeAttribute('data-tt-voice');
 
   if (TT_VOICE.state === 'busy') {
     bar.className = 'tt-voicebar';
