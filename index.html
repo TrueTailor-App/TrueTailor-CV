@@ -1131,6 +1131,19 @@
   }
   .tt-langbtn svg { display: block; }
   .tt-langsw { position: relative; }
+  /* v39.4. The one control that replaces the language row in stage 3. Coloured
+     like #btnUiLang for the same reason that one is coloured: a language
+     switcher that cannot be found is a language switcher that does not exist,
+     and the person who needs it is by definition the person who cannot read
+     what is currently on the screen. */
+  .tt-qlangbtn {
+    background: #E0F2FE; border-color: #7DD3FC; color: #075985; font-weight: 700;
+    padding: 5px 11px; gap: 5px;
+  }
+  .tt-qlangbtn:hover { background: #BAE6FD; border-color: #38BDF8; color: #0C4A6E; }
+  .tt-qlangbtn:focus-visible { outline: 2px solid #0284C7; outline-offset: 2px; }
+  .tt-qlangbtn[disabled] { opacity: .55; cursor: default; }
+  .tt-qlang-now { font-weight: 800; }
   .tt-fitdelta { border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 12px 14px; background: #FBFDFE; }
   .tt-fitdelta.is-up { border-color: #86EFAC; background: #F0FDF4; }
   .tt-fitdelta.is-flat { border-color: #FCD34D; background: #FFFBEB; }
@@ -1463,12 +1476,6 @@
     color: var(--vd-key); letter-spacing: -.03em;
   }
   .tt-vd-score span { font-size: .74rem; opacity: .7; }
-  /* The before and after reading. The old number is not struck through: it was
-     an honest measurement of an honest document and it is still true of the one
-     the candidate started with. */
-  .tt-vd-score.is-delta { flex-direction: row; align-items: baseline; gap: 7px; padding-top: 2px; }
-  .tt-vd-was { font-family: var(--tt-display); font-size: 1.5rem; font-weight: 800; opacity: .5; }
-  .tt-vd-arrow { font-size: 1.05rem; opacity: .6; }
   .tt-vd-more {
     border-top: 1px solid var(--vd-line); padding: 11px 18px; font-size: .78rem;
     background: rgba(255, 255, 255, .45);
@@ -1481,9 +1488,33 @@
     background: rgba(255, 255, 255, .6); font-size: .86rem; line-height: 1.55;
   }
   .tt-vd-note p { margin: 0; }
-  .tt-vd-pair { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: .78rem; }
-  .tt-vd-pair .tt-vd-pill { font-size: .72rem; padding: 3px 11px; }
-  .tt-vd-pair .tt-vd-was-pill { background: rgba(0, 0, 0, .28); }
+  /* v39.4. The second reading, given the same shape as the first one.
+     The .tt-vd-score.is-delta rule this replaces printed the two numbers at
+     nearly the same
+     size side by side, so the eye had to choose between them and the panel
+     read as less certain than the panel before the questions. The number that
+     matters at this point is the one the run ends on: it is set at the size of
+     the first panel's number, the change is a pill under it, and the earlier
+     reading is a footnote. Specificity beats the narrow screen rule below
+     without needing !important, so the column holds on a phone too. */
+  .tt-vd-score.is-after { flex-direction: column; align-items: center; gap: 4px; }
+  .tt-vd-score.is-after .tt-vd-num { display: flex; align-items: baseline; gap: 3px; }
+  .tt-vd-score.is-after .tt-vd-delta {
+    font-size: .78rem; font-weight: 800; opacity: 1; line-height: 1;
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+  }
+  .tt-vd-delta.is-up { background: rgba(21, 128, 61, .13); color: #15803D; }
+  .tt-vd-delta.is-down { background: rgba(183, 38, 28, .13); color: #B7261C; }
+  .tt-vd-delta.is-flat { background: rgba(0, 0, 0, .07); color: var(--vd-ink); }
+  .tt-vd-score.is-after .tt-vd-was2 { font-size: .72rem; opacity: .6; }
+  .tt-vd-prev {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: .75rem; opacity: .72; margin-bottom: 8px;
+  }
+  .tt-vd-prev .tt-vd-seg { width: 13px; height: 4px; }
+  @media (max-width: 620px) {
+    .tt-vd-score.is-after { align-items: flex-start; }
+  }
   @media (max-width: 620px) {
     .tt-vd-top { flex-direction: column; gap: 10px; }
     .tt-vd-score { flex-direction: row; align-items: baseline; gap: 6px; align-self: flex-start; }
@@ -1718,7 +1749,7 @@
           <span class="tt-brandname">TrueTailor <em>CV</em></span>
           <span class="tt-brandsub">התאמת קורות חיים למשרה, בלי להמציא כלום</span>
         </span>
-        <span class="tt-ver" id="verBadge">v39.3</span>
+        <span class="tt-ver" id="verBadge">v39.4</span>
       </div>
       <!-- The animation owns the middle of the bar. A posting rolls in from
            one side, a resume from the other, they meet, and one finished
@@ -2109,17 +2140,18 @@
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
       <h2 class="tt-card-title"><span class="tt-tag">שלב 3</span>שאלות התאמה ממוקדות</h2>
       <div class="flex items-center gap-2 text-sm">
-        <span id="qLangLabel" class="text-slate-500">שפת השאלות:</span>
-        <!-- v38, decisions 8 and 20. A segmented pair works for two languages
-             and not for twelve, but a bare list of twelve is friction for a
-             choice the app can already guess: the resume's language, the
-             posting's language and the interface language cover almost every
-             real case. Those are offered directly, with the reason written
-             under each, and the rest sit behind one more click. -->
+        <!-- v39.4, and a retraction of decision 8. Four controls stood here for
+             one choice: a label, three guessed suggestions with a reason under
+             each, and a fourth button holding the other nine languages. The
+             suggestions saved a click and cost a row of buttons that had to be
+             read before any of them could be dismissed, which is the wrong
+             trade for a setting most people never touch. One button now says
+             which language the questions are in and opens all twelve. -->
         <div class="tt-langpick" id="qLangPick">
-          <span id="qLangSuggest" class="tt-seg"></span>
           <div class="tt-langsw" style="display:inline-block">
-            <button id="btnQLangMore" class="tt-langbtn" aria-haspopup="listbox" aria-expanded="false">שפות נוספות ▾</button>
+            <button id="btnQLangMore" class="tt-langbtn tt-qlangbtn" aria-haspopup="listbox" aria-expanded="false">
+              <span id="qLangLabel">שפת השאלות:</span><span id="qLangCurrent" class="tt-qlang-now"></span><span aria-hidden="true">▾</span>
+            </button>
             <div id="qLangMenu" class="tt-langmenu tt-hidden" role="listbox"></div>
           </div>
         </div>
@@ -2398,7 +2430,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.3';
+var TT_VERSION = 'v39.4';
 
 var APP = {
   apiKey: '',
@@ -10967,6 +10999,19 @@ function ttLangLabel(code) {
   return TT_UI_LANG === 'he' ? (TT_LANG_LABEL_HE[code] || code) : TT_LANG.name(code);
 }
 
+/* Which language the questions open in, before anybody has chosen. Reads the
+   posting, falls back to the resume, and falls back again to Hebrew, so a run
+   that starts before the detector has anything to work with still gets a
+   supported code rather than an empty string. */
+function ttDefaultQuestionLang() {
+  var j = '';
+  try { j = currentJobLang(); } catch (e) {}
+  if (j && TT_LANG.isSupported(j)) return j;
+  var d = '';
+  try { d = currentDocLang(); } catch (e) {}
+  return (d && TT_LANG.isSupported(d)) ? d : 'he';
+}
+
 async function setQuestionLang(lang) {
   if (!TT_LANG.isSupported(lang)) return;
   var changed = APP.chat.lang !== lang;
@@ -11037,38 +11082,20 @@ async function retranslateQuestions(lang) {
   }
 }
 
-/* The two or three languages worth offering without opening a list, and why
-   each one is being offered. The reason is shown, because an unexplained
-   suggestion is just a shorter list. */
-function qLangSuggestions() {
-  var out = [];
-  function add(code, whyHe, whyEn) {
-    if (!code || !TT_LANG.isSupported(code)) return;
-    for (var i = 0; i < out.length; i++) if (out[i].code === code) return;
-    out.push({ code: code, why: L(whyHe, whyEn) });
-  }
-  add(currentDocLang(), H('שפת קורות החיים'), 'your resume');
-  add(APP.lang && APP.lang.job, H('שפת המשרה'), 'the posting');
-  add(TT_UI_LANG, H('שפת הממשק'), 'the interface');
-  add('en', H('נפוץ'), 'common');
-  return out.slice(0, 3);
-}
-
+/* v39.4. qLangSuggestions() lived here and built the row of two or three
+   guessed languages. It is gone with the row: the guess it was making is now
+   the default the conversation opens in, so offering the same guess again as a
+   button was offering to set a value to what it already is. */
 function updateLangButtons() {
-  var row = $('qLangSuggest');
-  if (row) {
-    row.innerHTML = '';
-    qLangSuggestions().forEach(function (sug) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('data-lang', sug.code);
-      b.className = 'tt-langbtn' + (sug.code === APP.chat.lang ? ' is-on' : '');
-      b.setAttribute('dir', TT_LANG.dir(sug.code));
-      b.innerHTML = '<span>' + TT_LANG.nativeName(sug.code) + '</span>' +
-                    '<span style="opacity:.6;font-weight:500;font-size:.72rem">' + sug.why + '</span>';
-      b.addEventListener('click', function () { setQuestionLang(sug.code); });
-      row.appendChild(b);
-    });
+  /* The button says which language the questions are in. The name is written
+     in that language itself, and carries its own direction, because a person
+     who cannot read the interface recognises the native name and nothing else
+     on this button. */
+  var now = $('qLangCurrent');
+  if (now) {
+    now.textContent = TT_LANG.nativeName(APP.chat.lang);
+    now.setAttribute('dir', TT_LANG.dir(APP.chat.lang));
+    now.setAttribute('lang', APP.chat.lang);
   }
 
   var menu = $('qLangMenu');
@@ -13247,9 +13274,13 @@ async function startQuestionsRun() {
   setStage(3);
   APP.queue = buildQueue();
   APP.chat.max = questionBudget(APP.queue);
-  /* v38: the questions open in the language of the resume, whichever of the
-     twelve that is, rather than being folded into Hebrew or English. */
-  APP.chat.lang = docLanguage(APP.doc) || 'he';
+  /* v39.4, and a change of rule. The questions used to open in the language of
+     the RESUME. The posting is the better default: it is the language the
+     employer reads, the language every requirement is phrased in, and the one
+     an answer eventually has to be worth something in. The resume's own lines
+     are untouched either way, an answer may still be written in any language,
+     and one button changes this. */
+  APP.chat.lang = ttDefaultQuestionLang();
   APP.chat.qa = [];
   var inRow = $('chatInputRow');
   if (inRow) inRow.classList.add('tt-hidden');
@@ -16528,20 +16559,37 @@ function renderFitDelta() {
   if (!after) { el.innerHTML = ''; return; }
 
   var up = d.after - d.before;
-  var score = '<div class="tt-vd-score is-delta">' +
-    '<span class="tt-vd-was">' + d.before + '</span>' +
-    '<span class="tt-vd-arrow">' + (up > 0 ? '↑' : up < 0 ? '↓' : '→') + '</span>' +
-    '<b>' + d.after + '</b><span>/100</span></div>';
+  var dir = up > 0 ? 'is-up' : up < 0 ? 'is-down' : 'is-flat';
+  var arrow = up > 0 ? '↑' : up < 0 ? '↓' : '→';
+  var move = up === 0 ? H('ללא שינוי') : (up > 0 ? '+' + up : String(up));
 
-  /* Both names, side by side, whether or not they differ. "Still medium" is an
-     answer to the question the candidate is asking, and a panel that only
-     speaks up when something improved is a panel that flatters. */
-  var pair = '<div class="tt-vd-pair">' +
-    '<span>' + escapeHtml(H('לפני')) + '</span>' +
-    '<span class="tt-vd-pill tt-vd-was-pill">' + escapeHtml(ttLevelName((before || after).level)) + '</span>' +
-    '<span>' + escapeHtml(H('אחרי')) + '</span>' +
-    '<span class="tt-vd-pill">' + escapeHtml(ttLevelName(after.level)) + '</span>' +
-    ttLevelMeter(after.level) +
+  /* v39.4. This used to print the old number and the new one at nearly the
+     same size with an arrow between them, which is a diff rather than a
+     verdict: the eye had two numbers to choose between and neither was the
+     answer to "how do I stand now". The reading the run ends on gets the size
+     the first panel gives its own number, the change is a pill under it, and
+     the earlier reading stays on screen as a footnote because it was an honest
+     measurement of the document the candidate started with. */
+  var score = '<div class="tt-vd-score is-after">' +
+    '<span class="tt-vd-num"><b>' + d.after + '</b><span>/100</span></span>' +
+    '<span class="tt-vd-delta ' + dir + '">' + escapeHtml(arrow + ' ' + move) + '</span>' +
+    '<span class="tt-vd-was2">' + escapeHtml(H('היה') + ' ' + d.before) + '</span>' +
+  '</div>';
+
+  /* The level, shown the way the first panel shows it: one pill and one full
+     size meter, so the two panels can be compared without re-reading them.
+     The earlier level is kept underneath at a smaller weight rather than
+     dropped. "Still medium" is an answer to the question the candidate is
+     asking, and a panel that only speaks up when something improved is a panel
+     that flatters. */
+  var pair = '<div class="tt-vd-pillrow">' +
+      '<span class="tt-vd-pill">' + escapeHtml(ttLevelName(after.level)) + '</span>' +
+      ttLevelMeter(after.level) +
+    '</div>' +
+    '<div class="tt-vd-prev">' +
+      '<span>' + escapeHtml(H('לפני התשובות:') + ' ' +
+                            ttLevelName((before || after).level)) + '</span>' +
+      ttLevelMeter((before || after).level) +
     '</div>';
 
   var txt = ttNarrativeFor('after', after);
@@ -16597,7 +16645,23 @@ function renderFitDelta() {
       H('שווה לשקול מחדש אם להתמודד על המשרה הזו, או להשקיע את הזמן במשרה קרובה יותר.') + '</p></div>';
   }
 
-  el.innerHTML = ttVerdictShell(after.level, head + body + note);
+  /* v39.4. The first panel warns when the measurement came from a backup model
+     and this one did not, which is the wrong way round: the whole point of the
+     second reading is to be compared with the first, and two numbers produced
+     by two different models are not comparable. The warning belongs here more
+     than it belongs there.
+
+     The rest of the first panel's blocks are deliberately not copied over.
+     ttVerdictDetail() would repeat the open must haves that already have their
+     own list below, and ttVerdictAdvice() is written in the future tense about
+     stage 3, which by this point has already happened. */
+  el.innerHTML = ttVerdictShell(after.level, head + ttMeasurementWarning() + body + note);
+
+  /* Scoped, not $(). ttMeasuredBy() writes the same id into both panels, and a
+     document wide lookup returns the one in stage 2, so this button did
+     nothing at all when it was clicked here. */
+  var cp = el.querySelector('#btnCopyMeasure');
+  if (cp) cp.addEventListener('click', ttCopyMeasurement);
 }
 
 function ttTouchedReqIds() {
@@ -18160,11 +18224,11 @@ var TT_I18N = (function () {
     'O que o currículo já comprova', 'Što životopis već dokazuje', 'Что резюме уже доказывает',
     '履歴書がすでに証明していること', 'बायोडाटा पहले से क्या सिद्ध करता है'
   ]);
-  put('btn.qlang_more', '#btnQLangMore', [
-    'שפות נוספות ▾',
-    'لغات أخرى ▾', 'More languages ▾', 'Autres langues ▾', 'Más idiomas ▾', 'Weitere Sprachen ▾',
-    'Altre lingue ▾', 'Mais idiomas ▾', 'Više jezika ▾', 'Другие языки ▾', '他の言語 ▾', 'अन्य भाषाएँ ▾'
-  ]);
+  /* v39.4. btn.qlang_more is gone with the button it named. It wrote its text
+     into #btnQLangMore as innerHTML, which now contains the label and the
+     current language as two spans, so leaving it here would have erased both
+     on every repaint. The label that survives is chat.lang_label, which writes
+     into the span rather than into the button. */
   put('chat.preamble', '#chatCard > p', [
     'כל שאלה נגזרת מדרישה שעדיין לא מוכחת, ולעיתים מכמה דרישות קרובות יחד, כדי שמספר השאלות יישאר קטן בלי לוותר על דיוק. הבורר מחליף את שפת כל השאלות, גם אלה שכבר על המסך, ולא רק את הבאות. שורות קורות החיים נשארות בשפת המקור שלהן, ואפשר לענות בכל שפה: התשובה מתורגמת לשפת קורות החיים לפני שהיא נכנסת אליהם.',
     'كل سؤال مشتق من متطلب لم يثبت بعد، وأحيانًا من عدة متطلبات متقاربة معًا، كي يبقى عدد الأسئلة صغيرًا دون التنازل عن التغطية.',
@@ -18469,6 +18533,9 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+/* v39.4, the second reading panel. */
+'היה':['كان','was','était','era','war','era','era','bilo','было','以前','पहले'],
+'לפני התשובות:':['قبل الإجابات:','Before the answers:','Avant les réponses :','Antes de las respuestas:','Vor den Antworten:','Prima delle risposte:','Antes das respostas:','Prije odgovora:','До ответов:','回答前：','उत्तरों से पहले:'],
 /* ---- where the posting's word sits in the line, v39.3 ---- */
 'מונח המשרה בשורה הזו מופיע רק במילה ה':['مصطلح الإعلان في هذا السطر لا يظهر إلا في الكلمة رقم ','The posting\'s term in this line only appears at word ','Le terme de l\'annonce n\'apparaît dans cette ligne qu\'au mot ','El término de la oferta solo aparece en esta línea en la palabra ','Der Begriff der Anzeige steht in dieser Zeile erst an Wort ','Il termine dell\'annuncio in questa riga compare solo alla parola ','O termo do anúncio nesta linha só aparece na palavra ','Pojam iz oglasa u ovom retku pojavljuje se tek na riječi ','Термин из вакансии в этой строке появляется только на слове ','この行では求人の用語が ','इस पंक्ति में विज्ञापन का शब्द केवल शब्द '],
 '. סורק קורא את תחילת השורה, ולכן שורה שפותחת במונח נתפסת מהר יותר. אפשר לערוך את השורה כאן.':['. القارئ السريع يقرأ بداية السطر، لذا السطر الذي يبدأ بالمصطلح يُلتقط أسرع. يمكنك تحرير السطر هنا.','. A scanner reads the start of a line, so a line that opens with the term is caught faster. You can edit the line here.','. Un lecteur rapide lit le début de la ligne, donc une ligne qui commence par le terme est repérée plus vite. Vous pouvez modifier la ligne ici.','. Quien escanea lee el inicio de la línea, así que una línea que empieza con el término se capta antes. Puedes editar la línea aquí.','. Wer überfliegt, liest den Zeilenanfang, deshalb wird eine Zeile, die mit dem Begriff beginnt, schneller erfasst. Sie können die Zeile hier bearbeiten.','. Chi scorre legge l\'inizio della riga, quindi una riga che apre con il termine viene colta prima. Puoi modificare la riga qui.','. Quem passa os olhos lê o início da linha, então uma linha que começa com o termo é notada antes. Você pode editar a linha aqui.','. Onaj tko preleti čita početak retka, pa se redak koji počinje pojmom brže uoči. Redak možete urediti ovdje.','. Читающий бегло смотрит начало строки, поэтому строка, начинающаяся с термина, замечается быстрее. Строку можно отредактировать здесь.',' 語目にしか出てきません。ざっと読む人は行頭を読むため、用語で始まる行のほうが速く目に留まります。ここで行を編集できます。','। से ही आता है। सरसरी नज़र पंक्ति की शुरुआत पढ़ती है, इसलिए शब्द से शुरू होने वाली पंक्ति जल्दी पकड़ में आती है। आप पंक्ति यहाँ संपादित कर सकते हैं।'],
