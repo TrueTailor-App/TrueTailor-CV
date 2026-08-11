@@ -1666,6 +1666,75 @@
     background-clip: text !important;
     color: transparent !important;
   }
+
+  /* ---------- the opening line, printed on a sheet ----------
+     Drawn from a photograph of a printed card. Three things make it read as
+     one: the paper, the tick, and the brush stroke under the highlighted
+     phrase. All three are CSS rather than the photograph itself, and that is
+     not an aesthetic choice. An image of Hebrew words stays Hebrew in the
+     other eleven interface languages, it costs two megabytes in a file whose
+     whole point is that it is one file, and no screen reader can read it.
+
+     The tick and the stroke are PSEUDO ELEMENTS. That is the load bearing
+     detail: the language switch rewrites the heading's innerHTML on every
+     change, and anything written inside the h2 would be wiped with it.
+     Pseudo elements are CSS, so they survive it and need no per language
+     code. The stroke hangs off the SPAN rather than off the heading, so it
+     measures itself against the highlighted phrase and sits under it in every
+     language instead of under the middle of the sheet.
+
+     The vertical padding is the number to leave alone. The sheet adds 44px
+     (20 over, 24 under) and the section gives back exactly 44 (26 and 22 down
+     to 4 and 0), so the paragraph, the pills and everything below them stay
+     on the pixel they are on today. The mobile rule does the same sum with
+     18+16 against 14+18. */
+  .tt-hero { padding: 4px 4px 0; }
+  .tt-hero h2 {
+    --tt-sheet-pad: 34px;                       /* the plain side */
+    --tt-tick: 1.9em;                           /* scales with the heading */
+    --tt-tick-gap: 40px;                        /* clear space around the tick */
+    position: relative;
+    display: inline-block;                      /* the sheet hugs the words */
+    /* box-sizing is border-box here, so the old 22ch would have counted the
+       padding as text and broken the heading onto a third and fourth line. */
+    max-width: min(100%, calc(22ch + var(--tt-sheet-pad) + var(--tt-tick) + var(--tt-tick-gap)));
+    padding: 20px var(--tt-sheet-pad) 24px;
+    padding-inline-end: calc(var(--tt-tick) + var(--tt-tick-gap));
+    background-color: #F2F2F0;
+    background-image:
+      repeating-linear-gradient(102deg, rgba(15,46,60,.028) 0 1px, rgba(0,0,0,0) 1px 4px),
+      repeating-linear-gradient(14deg, rgba(15,46,60,.022) 0 1px, rgba(0,0,0,0) 1px 5px),
+      linear-gradient(128deg, #FCFCFB 0%, #F1F1EF 52%, #E4E4E1 100%);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(15,46,60,.10), 0 18px 34px -20px rgba(15,46,60,.45);
+    transform: rotate(-.45deg);                 /* a sheet, not a swatch */
+  }
+  /* The tick sits at the END of the line, which is the left in Hebrew and
+     Arabic and the right in the other ten, with no rule of its own. */
+  .tt-hero h2::before {
+    content: ''; position: absolute;
+    inset-inline-end: 20px; top: 50%;
+    width: var(--tt-tick); height: calc(var(--tt-tick) * .93);
+    transform: translateY(-54%);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 112'%3E%3Cpath fill='%23285C6A' d='M2.5,52.5 C9,45 16,43.5 22,48.5 L47,76 L104.5,3 C108,-1.5 114.5,1 112.5,6.5 L57,102 C52.5,110 44,110 39,102 Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  .tt-hero h2 span { position: relative; display: inline-block; }
+  .tt-hero h2 span::after {
+    content: ''; position: absolute;
+    inset-inline-start: 4%; inset-inline-end: 4%;
+    bottom: -.14em; height: .2em;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 26' preserveAspectRatio='none'%3E%3Cpath fill='%23367F92' d='M3.5,17 C76,2 176,0 238,7 C238,15 236,18.5 233,19.5 C166,10 80,14.5 7,24.5 C4,25 2.5,20 3.5,17 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  }
+  @media (max-width: 700px) {
+    .tt-hero { padding: 2px 2px 0; }
+    .tt-hero h2 {
+      --tt-sheet-pad: 18px; --tt-tick: 1.35em; --tt-tick-gap: 26px;
+      padding: 14px var(--tt-sheet-pad) 18px;
+      padding-inline-end: calc(var(--tt-tick) + var(--tt-tick-gap));
+    }
+    .tt-hero h2::before { inset-inline-end: 13px; }
+  }
+
   .tt-fact b { color: #14586B !important; }
 
   .tt-step.is-done { background: var(--c-accent-w) !important; border-color: rgba(47,146,168,.45) !important; color: var(--c-accent-d) !important; }
@@ -2437,7 +2506,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.5';
+var TT_VERSION = 'v39.6';
 
 var APP = {
   apiKey: '',
