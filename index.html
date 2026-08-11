@@ -2253,6 +2253,10 @@
       </div>
     </div>
     <p id="reviewSummary" class="text-sm mb-3" style="color:var(--c-ink-2)"></p>
+    <!-- The summary is decided once, on its own, above the card list. It is the
+         only section a recruiter is guaranteed to read, and burying it as four
+         line cards among thirty made it the one decision nobody actually took. -->
+    <div id="summaryGate"></div>
     <div id="reviewOut"></div>
 
     <!-- The way out of the step sits at the end of the step. It used to sit in
@@ -2342,6 +2346,9 @@
     <div id="templatePicker" class="flex flex-wrap gap-3 mb-3"></div>
     <div id="accentPicker" class="mb-3"></div>
     <div id="fitBiasPicker" class="mb-3"></div>
+    <!-- What is still standing between this document and two pages, with the
+         reason for each removal and a button that only the candidate presses. -->
+    <aside id="fitTrimPanel" class="mb-3"></aside>
 
     <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
       <label class="inline-flex items-center gap-2 cursor-pointer">
@@ -2430,7 +2437,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.4';
+var TT_VERSION = 'v39.5';
 
 var APP = {
   apiKey: '',
@@ -2470,6 +2477,8 @@ var APP = {
   route: '',            // stop | work | polish. what this run is actually for
   skillModel: null,     // parsed skills section: groups + items
   skillPlan: null,      // stage 4b output
+  summaryGate: null,    // stage 5: the one decision taken about the summary
+  manualEdits: false,   // true once the candidate typed on the preview sheet
   chat: {
     history: [],        // real Gemini contents[] carried between turns
     turns: [],          // {role:'model'|'user', text, lang, skipped}
@@ -5851,6 +5860,13 @@ function rebuildDocument(doc, synthesis, added, skillLines, skillLineIds, orderP
      buildSkillLines exists at all. */
   var sumLines = (summaryPlan && summaryPlan.lines && summaryPlan.lines.length) ? summaryPlan.lines : null;
   var sumMarker = (summaryPlan && summaryPlan.format === 'bullets') ? '\u2022 ' : '';
+  /* Per line markers, when the plan carries them. A summary that keeps its own
+     shape keeps its own glyphs: three short lines with no bullet character are
+     read as a list by summaryShape, and emitting them under a uniform marker
+     would put bullets on a document that never had any. A reshape from one
+     form to the other sends no markers and takes the uniform one, which is the
+     behaviour this had before. */
+  var sumMarks = (summaryPlan && Array.isArray(summaryPlan.markers)) ? summaryPlan.markers : null;
   var sumSet = {}, sumEmitted = false;
   if (sumLines && summaryPlan.ids) {
     for (var q = 0; q < summaryPlan.ids.length; q++) sumSet[summaryPlan.ids[q]] = 1;
@@ -5904,7 +5920,9 @@ function rebuildDocument(doc, synthesis, added, skillLines, skillLineIds, orderP
     if (sumSet[l.id]) {
       if (!sumEmitted) {
         sumEmitted = true;
-        for (var u = 0; u < sumLines.length; u++) out.push(sumMarker + sumLines[u]);
+        for (var u = 0; u < sumLines.length; u++) {
+          out.push((sumMarks && sumMarks[u] != null ? sumMarks[u] : sumMarker) + sumLines[u]);
+        }
       }
       continue;                                   // the original summary lines are gone
     }
@@ -7680,10 +7698,10 @@ function summaryBrief(doc) {
        'Every sentence in it must restate something a line elsewhere in this resume already proves. You have the whole file below. If the file will not support a claim, the claim does not appear, and a summary of two true sentences beats four that cannot be defended in the interview.'];
 
   var form = shape.format === 'bullets' || (!shape.exists && want === 'bullets')
-    ? ['SHAPE: BULLETS. THREE OR FOUR of them, one line each, each carrying one thing this posting screens for.',
-       'Three that each land beat five that dilute each other. A fifth and a sixth are allowed ONLY when each of them carries a requirement from the top of the priority list that none of the others already carries. If a bullet is there to round the list out, it is not there.']
-    : ['SHAPE: ONE PARAGRAPH. THREE OR FOUR LINES. Not a list of nouns and not a mission statement: who this person is professionally, what they have run, and why that answers this posting.',
-       'A fifth line is allowed only when it carries something from the top of the priority list that the first four could not hold. Never a sixth. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.'];
+    ? ['SHAPE: BULLETS. BETWEEN FOUR AND SIX of them, one line each, each carrying one thing this posting screens for.',
+       'The number is chosen by this posting, not by filling a quota. Four is the floor and six is the ceiling. A fifth and a sixth are written ONLY when each of them carries a requirement from the top of the priority list that none of the others already carries. Four that each land beat six that dilute each other, and a bullet that is there to round the list out is not there.']
+    : ['SHAPE: ONE PARAGRAPH. FOUR TO SIX LINES. Not a list of nouns and not a mission statement: who this person is professionally, what they have run, and why that answers this posting.',
+       'Four is the floor and six is the ceiling, and the fifth and sixth lines are written only when each carries something from the top of the priority list that the earlier ones could not hold. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.'];
   if (shape.exists) {
     form.push('The candidate wrote their summary in this shape and it stays in this shape. Do not convert it.');
     form.push('It may get SHORTER than what they wrote. If their summary runs long, keep the claims that answer this posting and drop the ones that answer no posting in particular. Losing a true sentence that this employer has no use for is a gain, not a loss.');
@@ -7717,8 +7735,8 @@ function summaryBrief(doc) {
        'The shape the candidate already uses goes in "lines", exactly as every other section does, and it stays the default.',
        'The other shape goes in the SEPARATE key "summary_alt", with format "' + want + '".',
        want === 'bullets'
-         ? 'AS BULLETS: three to five, and each one is a REASON THIS CANDIDATE IS RIGHT FOR THIS JOB, not a duty they held. Take the strongest points the file supports, work down the priority list from the top, and stop when the next bullet would only be filling a slot. Four is usually right. A fifth earns its place only by carrying something none of the others carry.'
-         : 'AS A PARAGRAPH: three or four tight lines that answer one question, which is why this person fits THIS posting better than the next applicant. Not a career history and not a list of nouns joined by commas.',
+         ? 'AS BULLETS: four to six, and each one is a REASON THIS CANDIDATE IS RIGHT FOR THIS JOB, not a duty they held. Take the strongest points the file supports, work down the priority list from the top, and stop when the next bullet would only be filling a slot. A fifth and a sixth earn their place only by carrying something none of the others carry.'
+         : 'AS A PARAGRAPH: four to six tight lines that answer one question, which is why this person fits THIS posting better than the next applicant. Not a career history and not a list of nouns joined by commas.',
        'Same facts, same claims, different form and different emphasis. Not one claim may appear here that is not already proved by a line elsewhere in the document, and nothing may appear that is not in the default version above unless the file plainly supports it.',
        'Say in one sentence, in Hebrew, why this shape might suit this posting better. Address the candidate. Never tell them their own choice was wrong.']
     : [];
@@ -11320,6 +11338,9 @@ async function runSynthesis() {
     APP.synthesisRunning = false;
     setStatus('');
     try { renderAnswerUse(); } catch (e2) {}
+    /* Before the review opens, so the summary screen is the first thing on it
+       and is built from proposals that have all landed. */
+    try { buildSummaryGate(); } catch (e3) { APP.summaryGate = null; }
     openReview();          // must happen on every path, this is the only way on
   }
 }
@@ -12202,6 +12223,33 @@ function compileApproved() {
     }
   });
 
+  /* ---------- the summary is settled by the gate, and only by the gate ----------
+     Every summary card is hidden behind that one screen, so reading their
+     statuses here would let "אשר הכל" quietly reinstate a summary the candidate
+     had just declined. The gate holds the text that was actually approved,
+     including anything they typed into it. */
+  var sg = APP.summaryGate;
+  if (sg) {
+    APP.summaryPlan = null;
+    APP.newSummary = null;
+    if (sg.decided === 'approved' && sg.lines && sg.lines.length) {
+      if (sg.isNew) {
+        APP.newSummary = { heading: sg.heading || '', lines: sg.lines.slice(), format: sg.format || 'paragraph' };
+      } else {
+        var sumPlan = { lines: sg.lines.slice(), format: sg.format || 'paragraph', ids: (sg.ids || []).slice() };
+        if (sg.shape === 'base') {
+          sumPlan.markers = sg.lines.map(function (t, i) { return summaryGateMarker(sg, i); });
+        }
+        APP.summaryPlan = sumPlan;
+      }
+    }
+    /* A rewrite of a line the plan is about to replace must not also travel as
+       a per line edit: the plan wins in rebuildDocument, and leaving it in
+       APP.synthesis would only make the diff describe a change that never
+       reaches the page. */
+    (sg.ids || []).forEach(function (id) { delete APP.synthesis[id]; });
+  }
+
   if (APP.skillModel) {
     var plan = { items: [], add: [] };
     var approved = {};
@@ -12236,6 +12284,9 @@ function compileApproved() {
   APP.finalText = rebuildDocument(APP.doc, APP.synthesis, APP.added,
     APP.skillLines, APP.skillModel ? APP.skillModel.lineIds : null, APP.orderPlan, APP.dropped,
     APP.summaryPlan, APP.newSummary);
+  /* The document was just rebuilt from the approved set, so whatever was typed
+     onto the preview sheet is no longer in it. */
+  APP.manualEdits = false;
   return APP.finalText;
 }
 
@@ -16065,6 +16116,7 @@ function resetRun() {
      "התחל התאמה", so the preview and both exports came out flat. Clearing the
      resume box is what makes that file gone, and resetPanel('resume') does it. */
   APP.previewDirty = false; APP.synthesisRunning = false;
+  APP.summaryGate = null; APP.manualEdits = false;
   if (typeof setStage === 'function') setStage(1);
   APP.chat = { history: [], turns: [], qa: [], lang: APP.chat.lang, langSeq: APP.chat.langSeq || 0,
                asked: 0, max: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
@@ -16227,14 +16279,257 @@ function openReview() {
 }
 
 function reviewCounts() {
-  var a = 0, r = 0;
-  APP.changes.forEach(function (c) { if (c.status === 'approved') a++; else r++; });
-  return { approved: a, rejected: r, total: APP.changes.length };
+  var a = 0, r = 0, t = 0;
+  APP.changes.forEach(function (c) {
+    if (summaryGateOwns(c)) return;      // counted on the summary screen, not here
+    t++;
+    if (c.status === 'approved') a++; else r++;
+  });
+  return { approved: a, rejected: r, total: t };
+}
+
+/* =========================================================================
+   THE SUMMARY SCREEN
+
+   A recruiter gives the page a few seconds and spends them at the top of it.
+   Everything the writing stage proposed for the summary used to arrive as
+   ordinary cards, one per line, somewhere inside a list of thirty, which is
+   the wrong shape for the one decision on this screen that is taken as a
+   whole: this summary, or the one I wrote.
+
+   So it is taken once, here, above the list, on the finished text rather than
+   on four separate sentences. Three properties are deliberate.
+
+   It is EDITABLE. What the candidate leaves in the box is what enters the
+   document, because a summary is the one section they will want to say in
+   their own words.
+
+   It is REVERSIBLE and it takes nothing away by surprise: declining leaves the
+   summary exactly as they wrote it, and on a resume that has no summary the
+   proposal starts switched off.
+
+   And it OWNS the section. Every summary card is hidden behind this screen and
+   compileApproved reads the decision from here alone, so no bulk button can
+   reinstate a summary that was declined.
+   ========================================================================= */
+function summaryGateOwns(ch) {
+  return !!(APP.summaryGate && ch && ch.cat === 'summary');
+}
+
+/* The marker one proposed summary line is emitted with. Used by the screen and
+   by compileApproved, so what is read is what is written. */
+function summaryGateMarker(g, i) {
+  if (!g) return '';
+  if (!g.isNew && g.shape === 'base') {
+    if (g.markers && g.markers.length === g.lines.length && g.markers[i] != null) return g.markers[i];
+    for (var k = 0; g.markers && k < g.markers.length; k++) {
+      if (String(g.markers[k] || '').trim()) return g.markers[k];
+    }
+    return '';
+  }
+  return g.format === 'bullets' ? '\u2022 ' : '';
+}
+
+function summaryGateText(g) {
+  if (!g) return '';
+  return g.lines.map(function (t, i) { return summaryGateMarker(g, i) + t; }).join('\n');
+}
+
+/* Built once, at the end of stage 4, out of proposals that already exist. It
+   computes nothing new and calls nothing: the cards ARE the proposal, this
+   only puts them back together into the paragraph a reader will see. */
+function buildSummaryGate() {
+  APP.summaryGate = null;
+  if (!APP.doc) return;
+  var cur = summaryEditableLines(APP.doc);
+  var newCh = null, altCh = null;
+  APP.changes.forEach(function (c) {
+    if (c.kind === 'summary_new') newCh = c;
+    else if (c.kind === 'summary_shape') altCh = c;
+  });
+
+  if (!cur.length) {
+    if (!newCh || !newCh.altLines || !newCh.altLines.length) return;
+    APP.summaryGate = {
+      isNew: true, ids: [], lang: newCh.lang || 'he',
+      heading: newCh.heading || '',
+      baseLines: newCh.altLines.slice(), baseFormat: newCh.altFormat || 'paragraph',
+      markers: null, altLines: null, altFormat: '', altWhy: '',
+      shape: 'base', lines: newCh.altLines.slice(), format: newCh.altFormat || 'paragraph',
+      before: '', edited: false,
+      /* A section the resume never had starts off, exactly as its card did. */
+      decided: 'rejected', why: newCh.why || ''
+    };
+    return;
+  }
+
+  var byId = {};
+  APP.changes.forEach(function (c) {
+    if (c.cat === 'summary' && c.kind === 'line' && c.lineId) byId[c.lineId] = c;
+  });
+  var base = [], markers = [], touched = false;
+  cur.forEach(function (l) {
+    var c = byId[l.id];
+    var own = String(l.text || '').trim();
+    var t = (c && String(c.after || '').trim()) ? String(c.after).trim() : own;
+    if (t !== own) touched = true;
+    base.push(t);
+    markers.push(l.marker || '');
+  });
+  /* Nothing was rewritten and no other shape was offered: there is no decision
+     to put on the screen, and a panel that proposes the text already in the
+     document reads as a bug. */
+  if (!touched && !(altCh && altCh.altLines && altCh.altLines.length)) return;
+
+  APP.summaryGate = {
+    isNew: false,
+    ids: cur.map(function (l) { return l.id; }),
+    lang: cur[0].lang || 'he',
+    heading: '',
+    baseLines: base.slice(), baseFormat: summaryShape(APP.doc).format || 'paragraph',
+    markers: markers,
+    altLines: (altCh && altCh.altLines && altCh.altLines.length) ? altCh.altLines.slice() : null,
+    altFormat: altCh ? (altCh.altFormat || '') : '',
+    altWhy: altCh ? String(altCh.why || '') : '',
+    shape: 'base',
+    lines: base.slice(),
+    format: summaryShape(APP.doc).format || 'paragraph',
+    before: cur.map(function (l) { return (l.marker || '') + l.text; }).join('\n'),
+    edited: false,
+    /* A rewrite of a summary that already exists arrives on, which is what the
+       cards behind this screen did before it existed. */
+    decided: 'approved', why: ''
+  };
+}
+
+function summaryGateShape(g, which) {
+  if (!g) return;
+  if (which === 'alt' && g.altLines && g.altLines.length) {
+    g.shape = 'alt';
+    g.lines = g.altLines.slice();
+    g.format = g.altFormat || 'bullets';
+  } else {
+    g.shape = 'base';
+    g.lines = g.baseLines.slice();
+    g.format = g.baseFormat || 'paragraph';
+  }
+  g.edited = false;
+}
+
+function renderSummaryGate() {
+  var el = $('summaryGate');
+  if (!el) return;
+  var g = APP.summaryGate;
+  if (!g) { el.innerHTML = ''; return; }
+
+  var on = g.decided === 'approved';
+  var text = summaryGateText(g);
+  var dir = dirForText(text || g.before, g.lang);
+  var head = (g.isNew ? g.heading + '\n' : '') + text;
+
+  var toggle = '';
+  if (g.altLines && g.altLines.length) {
+    toggle = '<div class="flex flex-wrap items-center gap-2 mt-2">' +
+      '<span class="text-xs text-slate-600">' + H('מבנה:') + '</span>' +
+      '<button class="tt-sg text-xs px-2 py-1 rounded border ' +
+        (g.shape === 'base' ? 'border-slate-800 bg-white font-semibold' : 'border-slate-300 bg-white') +
+        '" data-act="shape-base">' + (g.baseFormat === 'bullets' ? H('בולטים (כפי שכתבת)') : H('פסקה (כפי שכתבת)')) + '</button>' +
+      '<button class="tt-sg text-xs px-2 py-1 rounded border ' +
+        (g.shape === 'alt' ? 'border-slate-800 bg-white font-semibold' : 'border-slate-300 bg-white') +
+        '" data-act="shape-alt">' + (g.altFormat === 'bullets' ? H('בולטים') : H('פסקה')) + '</button>' +
+      (g.altWhy ? '<span class="text-xs text-slate-500">' + escapeHtml(g.altWhy) + '</span>' : '') +
+      '</div>';
+  }
+
+  var before = g.isNew
+    ? '<div class="text-xs text-slate-500 mb-1">' + H('בקורות החיים שהעלית') + '</div>' +
+      '<div class="rounded p-2 bg-white border border-slate-200 text-slate-500 text-sm">' +
+      H('אין תקציר מקצועי. זה סעיף חדש שייכנס מתחת לפרטי הקשר.') + '</div>'
+    : '<div class="text-xs text-slate-500 mb-1">' + H('התקציר שלך, כפי שכתבת אותו') + '</div>' +
+      '<div class="rounded p-2 bg-white border border-slate-200 text-slate-500 text-sm whitespace-pre-line" dir="' + dirForText(g.before, g.lang) + '">' +
+      escapeHtml(g.before) + '</div>';
+
+  var status = on
+    ? '<span class="text-emerald-800 font-semibold">' +
+        (g.isNew ? H('התקציר המוצע ייכנס לקורות החיים.') : H('התקציר המוצע יחליף את התקציר הקיים.')) + '</span>'
+    : '<span class="text-slate-700 font-semibold">' +
+        (g.isNew ? H('לא ייכנס תקציר. קורות החיים יישארו בלי סעיף תקציר.') : H('התקציר שכתבת יישאר בדיוק כפי שהוא.')) + '</span>';
+
+  el.innerHTML =
+    '<div class="rounded-lg border-2 ' + (on ? 'border-amber-400' : 'border-slate-300') + ' bg-amber-50/60 p-3 mb-4">' +
+      '<div class="font-semibold text-sm mb-1">' + H('התקציר המקצועי') +
+        (g.edited ? ' <span class="text-[11px] font-normal text-slate-600">' + H('(נערך על ידך)') + '</span>' : '') + '</div>' +
+      '<p class="text-xs text-slate-700 mb-2">' +
+        H('מגייס מקדיש שניות ספורות לסריקה הראשונה, והתקציר הוא מה שהוא קורא בהן. ההצעה למטה בנויה אך ורק ממה שכבר כתוב בקורות החיים שלך, ומנוסחת מול הדרישות של המשרה הזו. אין בה אף טענה חדשה.') +
+      '</p>' +
+      '<div class="grid sm:grid-cols-2 gap-3">' +
+        '<div>' + before + '</div>' +
+        '<div><div class="text-xs text-slate-500 mb-1">' + H('ההצעה למשרה הזו') + '</div>' +
+          '<div class="rounded p-2 bg-white border border-amber-300 text-sm whitespace-pre-line" dir="' + dir + '">' +
+            escapeHtml(head) + '</div></div>' +
+      '</div>' +
+      toggle +
+      '<div class="flex flex-wrap gap-2 mt-3">' +
+        '<button class="tt-sg text-xs px-3 py-1.5 rounded ' + (on ? 'bg-emerald-600 text-white' : 'border border-slate-300 bg-white hover:bg-slate-50') + '" data-act="use">' +
+          H('השתמש בתקציר המוצע') + '</button>' +
+        '<button class="tt-sg text-xs px-3 py-1.5 rounded ' + (!on ? 'bg-slate-700 text-white' : 'border border-slate-300 bg-white hover:bg-slate-50') + '" data-act="keep">' +
+          (g.isNew ? H('בלי תקציר') : H('השאר את התקציר הקיים')) + '</button>' +
+        '<button class="tt-sg text-xs px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50" data-act="edit">' +
+          H('ערוך את ההצעה') + '</button>' +
+      '</div>' +
+      '<div class="text-xs mt-2">' + status + '</div>' +
+      '<div class="tt-sg-editor tt-hidden mt-2">' +
+        '<textarea class="w-full border border-slate-300 rounded-lg p-2 text-sm tt-line" rows="7" dir="' + dir + '">' +
+          escapeHtml(text) + '</textarea>' +
+        '<div class="text-xs text-slate-500 mt-1">' +
+          H('שורה אחת לכל בולט, או פסקה אחת ברצף. מה שיישאר כאן הוא מה שייכנס לקורות החיים, בלי בדיקה נוספת. עד 6 שורות.') + '</div>' +
+        '<div class="flex gap-2 mt-1">' +
+          '<button class="tt-sg text-xs px-2 py-1 rounded bg-blue-600 text-white" data-act="save">' + H('שמור והשתמש') + '</button>' +
+          '<button class="tt-sg text-xs px-2 py-1 rounded border border-slate-300" data-act="cancel">' + H('בטל') + '</button>' +
+          '<button class="tt-sg text-xs px-2 py-1 rounded border border-slate-300" data-act="reset">' + H('חזור להצעה המקורית') + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  wireSummaryGate(el);
+}
+
+function wireSummaryGate(el) {
+  var box = el.querySelector('.tt-sg-editor');
+  var btns = el.querySelectorAll('.tt-sg');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function (ev) {
+      var g = APP.summaryGate;
+      if (!g) return;
+      var act = ev.currentTarget.getAttribute('data-act');
+      if (act === 'edit') { if (box) box.classList.remove('tt-hidden'); return; }
+      if (act === 'cancel') { if (box) box.classList.add('tt-hidden'); return; }
+      if (act === 'use') g.decided = 'approved';
+      else if (act === 'keep') g.decided = 'rejected';
+      else if (act === 'shape-base') summaryGateShape(g, 'base');
+      else if (act === 'shape-alt') summaryGateShape(g, 'alt');
+      else if (act === 'reset') { summaryGateShape(g, g.shape); }
+      else if (act === 'save') {
+        var ta = el.querySelector('.tt-sg-editor textarea');
+        var raw = ta ? String(ta.value || '') : '';
+        var lines = raw.split('\n').map(function (t) {
+          return sanitizeAiText(String(t).replace(/^\s*[\u2022\u25CF\u00B7\-\u2013*]\s*/, '').trim(), g.lang);
+        }).filter(function (t) { return t; }).slice(0, TT_SUMMARY_MAX_LINES);
+        if (!lines.length) { showError(H('לא נשאר טקסט בתקציר, ולכן העריכה לא נשמרה.')); return; }
+        g.lines = lines;
+        g.edited = true;
+        g.decided = 'approved';
+        if (box) box.classList.add('tt-hidden');
+      }
+      renderReview();
+    });
+  }
 }
 
 function renderReview() {
   var el = $('reviewOut');
   if (!el) return;
+  try { renderSummaryGate(); } catch (e) {}
   var c = reviewCounts();
   var sum = $('reviewSummary');
   if (sum) {
@@ -16264,7 +16559,7 @@ function renderReview() {
 
   var html = '';
   REVIEW_GROUPS.forEach(function (g) {
-    var list = APP.changes.filter(function (x) { return x.cat === g.cat; });
+    var list = APP.changes.filter(function (x) { return x.cat === g.cat && !summaryGateOwns(x); });
     if (!list.length) return;
     html += '<div class="mb-4"><h3 class="font-semibold text-sm text-slate-600 mb-2 flex items-center gap-2">' +
             escapeHtml(g.title) + '<span class="text-xs font-normal text-slate-400">' + list.length + H(' הצעות</span>') +
@@ -16483,6 +16778,7 @@ function wireReviewCards() {
          passes over it and a bulk reject still cancels it. */
       APP.changes.forEach(function (c) {
         if (c.cat !== cat) return;
+        if (summaryGateOwns(c)) return;      // the summary is decided on its own screen
         if (act === 'approve' && isRemoval(c.kind)) return;
         c.status = act === 'approve' ? 'approved' : 'rejected';
       });
@@ -16495,12 +16791,12 @@ function bindReviewUi() {
   var all = $('btnApproveAll');
   if (all) all.addEventListener('click', function () {
     // same rule as the per section bulk button: removals are never bulk approved
-    APP.changes.forEach(function (c) { if (!isRemoval(c.kind)) c.status = 'approved'; });
+    APP.changes.forEach(function (c) { if (!isRemoval(c.kind) && !summaryGateOwns(c)) c.status = 'approved'; });
     renderReview();
   });
   var none = $('btnRejectAll');
   if (none) none.addEventListener('click', function () {
-    APP.changes.forEach(function (c) { c.status = 'rejected'; });
+    APP.changes.forEach(function (c) { if (!summaryGateOwns(c)) c.status = 'rejected'; });
     renderReview();
   });
   var go = $('btnToPreview');
@@ -17183,12 +17479,83 @@ function thinLastPageNote() {
     H('אפשר לערוך ישירות כאן בתצוגה, או לחזור לשלב 5 ולוותר על שורה שאינה משרתת את המשרה.');
 }
 
+/* ---------------- what is still standing between this and two pages ----------
+   The limit was enforced all along, and the remedy was a sentence telling the
+   candidate to go back a step and find the proposals. This puts them where the
+   overflow is reported, with the reason for each one next to it and a button
+   that only they press. Nothing here removes anything on its own.
+
+   It is drawn under the limit too, and deliberately: a document that fits is
+   not the same as a document aimed at this posting, and a point that serves no
+   requirement is worth losing whether or not the page is full. */
+function pendingTrimList() {
+  return APP.changes.filter(function (c) { return isRemoval(c.kind) && c.status !== 'approved'; });
+}
+
+function renderTrimPanel() {
+  var el = $('fitTrimPanel');
+  if (!el) return;
+  if (!APP.finalText) { el.innerHTML = ''; return; }
+  var over = (APP.fitPages || 1) > TT_FIT_MAX_PAGES + 0.02;
+  var list = pendingTrimList();
+  if (!over && !list.length) { el.innerHTML = ''; return; }
+
+  var html = '<div class="rounded-lg border ' + (over ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50') + ' p-3">';
+  html += over
+    ? '<div class="font-semibold text-sm text-red-900">' + H('המסמך נמשך על כ־') + (APP.fitPages || 1).toFixed(1) + H(' עמודים, והמכסה היא שני עמודים.') + '</div>' +
+      '<div class="text-xs text-red-900 mt-1">' +
+        H('הגופן והמרווחים כבר הוקטנו עד הגבול הקריא, ולכן מכאן יורדים רק על ידי הסרת תוכן שלא משרת את המשרה הזו. כל הצעה מוצגת עם הנימוק שלה, ושום דבר לא יורד בלי שתאשר.') +
+      '</div>'
+    : '<div class="font-semibold text-sm text-slate-700">' + H('המסמך נכנס לשני עמודים.') + '</div>' +
+      '<div class="text-xs text-slate-600 mt-1">' +
+        H('הסעיפים האלה סומנו כלא רלוונטיים למשרה הזו. הם לא חייבים לרדת, אבל דף שמכיל רק את מה שנוגע למשרה נקרא מהר יותר.') +
+      '</div>';
+
+  if (!list.length) {
+    html += '<div class="text-xs text-red-900 mt-2">' +
+      H('אין כרגע הצעות הסרה ממתינות. אפשר לקצר שורות ישירות בדף שלמטה, או לחזור לשלב 5 ולדחות ניסוחים שהאריכו שורות.') + '</div>';
+  } else {
+    html += '<div class="space-y-2 mt-2">';
+    list.forEach(function (c) {
+      var text = String(c.before || '');
+      var rows = text.split('\n').filter(function (t) { return t.trim(); }).length;
+      html += '<div class="rounded border border-slate-200 bg-white p-2">' +
+        '<div class="text-[11px] text-slate-500 mb-1">' + escapeHtml(CHANGE_LABEL[c.kind] || c.kind) +
+          H(' · כ־') + rows + H(' שורות') + '</div>' +
+        '<div class="text-sm text-slate-500 line-through whitespace-pre-line" dir="' + dirForText(text, c.lang) + '">' +
+          escapeHtml(text.length > 400 ? text.slice(0, 400) + '…' : text) + '</div>' +
+        (c.why ? '<div class="text-xs text-slate-600 mt-1"><b>' + H('הנימוק:') + '</b> ' + escapeHtml(c.why) + '</div>' : '') +
+        '<button class="tt-trim text-xs px-2 py-1 rounded border border-red-300 text-red-800 bg-white hover:bg-red-50 mt-2" data-id="' +
+          escapeHtml(c.id) + '">' + H('הסר ובנה מחדש') + '</button>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+
+  var btns = el.querySelectorAll('.tt-trim');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function (ev) {
+      var ch = changeById(ev.currentTarget.getAttribute('data-id'));
+      if (!ch) return;
+      /* Rebuilding starts from the approved set, so anything typed onto the
+         sheet since the last build is not in it. Said before it happens. */
+      if (APP.manualEdits && !window.confirm(H('ההסרה בונה את המסמך מחדש מההצעות המאושרות, והעריכות שהקלדת בדף ולא הוחלו יאבדו. להמשיך?'))) return;
+      ch.status = 'approved';
+      compileApproved();
+      renderPreview();
+      try { renderReview(); } catch (e) {}
+    });
+  }
+}
+
 function fitNotice() {
   var step = fitLadder()[APP.fitStep || 0];
   var over = APP.fitPages > TT_FIT_MAX_PAGES + 0.02;
   if (over) {
     previewNote(H('קורות החיים עדיין נמשכים על כ־') + APP.fitPages.toFixed(1) + H(' עמודים גם אחרי הקטנת הגופן והמרווחים למינימום הקריא. ') +
-      H('הקטנה נוספת תפגע בקריאוּת, ולכן היא נעצרת כאן. כדי לרדת לשני עמודים צריך להסיר תוכן: חזור לשלב 5 ואשר את הסעיפים או התפקידים שסומנו כלא רלוונטיים למשרה.'), 'warn');
+      H('הקטנה נוספת תפגע בקריאוּת, ולכן היא נעצרת כאן. כדי לרדת לשני עמודים צריך להסיר תוכן, וההצעות להסרה מופיעות בפאנל שמעל הדף.'), 'warn');
     return;
   }
 
@@ -17479,6 +17846,7 @@ function renderPreview() {
   /* After fitPageToLimit, because the control only appears once there is
      actually a trade to make, and that is not known until the loop has run. */
   try { renderFitBiasPicker(); } catch (e) {}
+  try { renderTrimPanel(); } catch (e) {}
   try { renderProgress(); } catch (e) {}
 
   var blocks = page.querySelectorAll('[contenteditable="true"]');
@@ -20573,6 +20941,7 @@ function applyPreviewEdits() {
      nothing to do. Counted line by line, because that is what was edited. */
   var changed = countChangedLines(APP.finalText, next);
   APP.finalText = next;
+  if (changed) APP.manualEdits = true;
   var box = $('finalOutput');
   if (box) box.value = APP.finalText;
   renderPreview();
