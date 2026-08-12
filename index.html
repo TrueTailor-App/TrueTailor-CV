@@ -1984,6 +1984,14 @@
       <button id="btnGetKey" class="tt-btn tt-btn-ok">🔑 קבל מפתח API בחינם</button>
       <button id="btnHowKey" class="tt-btn">איך עושים את זה?</button>
     </div>
+    <!-- The app remembers which Gemini model answered the measuring stages, so
+         that two runs a week apart stay comparable. When that note gets stuck on
+         a weaker model the scores drop and nothing on screen explains why. This
+         is the way out, and it says what it does rather than naming a cache. -->
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <button id="btnResetMeasureModel" class="tt-btn tt-btn-sm">🔄 אפס את מודל המדידה</button>
+      <span id="resetMeasureHint" class="text-[11px] text-slate-500 flex-1 min-w-[240px]">האפליקציה זוכרת איזה מודל של Google Gemini ביצע את המדידה, כדי ששתי הרצות יהיו ברות השוואה. אם ציוני ההתאמה נראים נמוכים מהרגיל, לחצו כאן והמדידה הבאה תיבחר מחדש מהמודל החזק ביותר שהמפתח שלכם מגיע אליו. המפתח עצמו לא נמחק.</span>
+    </div>
     <!-- Off means the key lives in sessionStorage and dies with the tab. On is
          the default and is what the app always did. The wording says what
          happens rather than naming a storage API, because the person who needs
@@ -2506,7 +2514,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.9';
+var TT_VERSION = 'v39.10';
 
 var APP = {
   apiKey: '',
@@ -4900,16 +4908,46 @@ var TT_MEASURE_FLAG = 'tt_measure_unavailable';
    answers, which is a broken key or a dead network rather than a policy. */
 var TT_MEASURE_MODEL_KEY = 'tt_measure_model_v1';
 
+/* v39.10. THE PIN THAT NEVER CAME OUT.
+
+   Remembering the instrument is right and stays. What was wrong is that it was
+   remembered FOREVER: the note was cleared only when the model stopped
+   answering altogether, or when the API key was removed. So a single busy
+   minute at the top of the cascade was enough to write "gemini-3.5-flash-lite"
+   into localStorage, and every measurement from that moment on was taken by the
+   weakest model available, for as long as that browser lived.
+
+   Reported from a real pairing: one resume, translated one to one, measured
+   against one Hebrew posting. On the pinned lite model the Hebrew run scored 98
+   and the English run 64, with the must have gate reading 5/5 against 2/4. The
+   same two files on gemini-3.6-flash scored 99 and 100, with 5/5 both times.
+   The forty point gap was never about the language. It was the instrument.
+
+   Two independent cures, because the two causes are independent. A day of
+   memory handles a cascade that has changed underneath the note. A rank check
+   handles the note that was written during a moment of load and is now simply
+   worse than what is on offer. */
+var TT_MEASURE_MODEL_TTL = 24 * 60 * 60 * 1000;
+
 function ttMeasureModel() {
   try {
     var raw = localStorage.getItem(TT_MEASURE_MODEL_KEY);
-    return raw ? String(raw) : '';
+    if (!raw) return '';
+    var o = null;
+    try { o = JSON.parse(raw); } catch (e) {}
+    /* A bare string is the format this used before there was a clock on it, and
+       it is exactly the value that could have been sitting there for months.
+       Treated as expired on sight: one rediscovery costs a single call and
+       releases every browser that is stuck on a weaker model. */
+    if (!o || typeof o !== 'object' || !o.m) return '';
+    if (Date.now() - (Number(o.ts) || 0) > TT_MEASURE_MODEL_TTL) return '';
+    return String(o.m);
   } catch (e) { return ''; }
 }
 
 function ttSetMeasureModel(m) {
   if (!m) return;
-  try { localStorage.setItem(TT_MEASURE_MODEL_KEY, String(m)); } catch (e) {}
+  try { localStorage.setItem(TT_MEASURE_MODEL_KEY, JSON.stringify({ m: String(m), ts: Date.now() })); } catch (e) {}
 }
 
 function ttForgetMeasureModel() {
@@ -4939,7 +4977,33 @@ async function ttMeasureCall(prompt, opts) {
   Object.keys(opts || {}).forEach(function (k) { conf[k] = opts[k]; });
 
   var known = ttMeasureModel();
+
+  /* v39.10. Is the remembered instrument still the best one on offer. Asked
+     once per measurement call and answered with one attempt, not with a survey:
+     if the head of the cascade outranks the note, it gets the call, and it
+     becomes the new note if it answers. If it does not answer, the note stands
+     and nothing is lost but the attempt.
+
+     Strictly an upgrade path. Nothing here can ever move the measurement DOWN
+     the cascade, which is the whole reason the note exists. */
   if (known) {
+    try {
+      var head = (getModelCascade() || [])[0] || '';
+      if (head && head !== known && rankModel(head) > rankModel(known)) {
+        try {
+          conf.models = [head];
+          var better = await callGemini(prompt, conf);
+          ttSetMeasureModel(TT_LAST_MODEL);
+          return better;
+        } catch (eUp) {
+          if (!ttIsAvailabilityError(eUp)) throw eUp;
+          /* The better model is busy right now. The remembered one is still a
+             working instrument, so fall through to it rather than failing. */
+        }
+      }
+    } catch (eRank) {
+      if (eRank && eRank[TT_MEASURE_FLAG]) throw eRank;
+    }
     try {
       conf.models = [known];
       return await callGemini(prompt, conf);
@@ -7102,9 +7166,31 @@ var OCR_PROMPT = [
 /* ---------------- stage 1: signals ---------------- */
 var REQ_KINDS = { hard_skill: 1, tool: 1, soft_skill: 1, responsibility: 1, domain: 1, certification: 1, education: 1 };
 
+/* v39.10. Whether the reading was taken by the model this key would normally
+   reach. The field has been in the measurement line since it was written and
+   NOTHING EVER SET IT, so it printed "no" on every run including the ones where
+   the head of the cascade had plainly been passed over. A diagnostic that
+   always answers the same thing is worse than no diagnostic: it was read as
+   evidence that nothing had gone wrong. */
+function ttFellBack(model) {
+  try {
+    var head = (getModelCascade() || [])[0] || '';
+    return !!(head && model && head !== model);
+  } catch (e) { return false; }
+}
+
+function ttNoteFellBack(model) {
+  if (!APP.runModels) APP.runModels = {};
+  /* Either half of the measurement is enough. Once a run has been touched by a
+     backup model the two halves are no longer comparable, and that stays true
+     for the rest of the run. */
+  if (ttFellBack(model)) APP.runModels.fellBack = true;
+}
+
 function ttRecordSignalsModel() {
   if (!APP.runModels) APP.runModels = {};
   APP.runModels.signals = TT_LAST_MODEL;
+  ttNoteFellBack(TT_LAST_MODEL);
   /* What the cascade would have chosen if nothing were rate limited. Kept so
      that the panel can tell the difference between "measured by the usual
      model" and "measured by whatever was still answering". */
@@ -8190,6 +8276,7 @@ async function stepCoverage() {
        measurement. */
   if (!APP.runModels) APP.runModels = {};
   APP.runModels.coverage = TT_LAST_MODEL;
+  ttNoteFellBack(TT_LAST_MODEL);
 
   var obj = safeJsonParse(raw);
   if (!obj) throw new Error(H('לא הצלחתי לקרוא את תשובת ההשוואה. נסה שוב.'));
@@ -9751,7 +9838,16 @@ function ttMeasuredBy() {
 
 /* The one case where the model is not a footnote. A score produced by a backup
    model is not comparable with one produced by the usual model, and comparing
-   them is exactly what a person does when they run the same pairing twice. */
+   them is exactly what a person does when they run the same pairing twice.
+
+   v39.10. The old wording named a cause it could not know: it said the quota
+   had run out. Often that was true. But the case that actually cost a candidate
+   forty points was the other one, where the app itself was holding a weaker
+   model on purpose because that model had answered first once, and the advice
+   that followed - wait a minute and run again - could never have helped, since
+   waiting does not change a note in localStorage. So the block now says WHAT
+   happened rather than WHY, and it carries the button that fixes the case the
+   old advice could not. */
 function ttMeasurementWarning() {
   var m = APP.runModels;
   if (!m || !m.coverage) return '';
@@ -9759,12 +9855,25 @@ function ttMeasurementWarning() {
   var backup = m.preferred && m.coverage !== m.preferred;
   if (!mixed && !backup) return '';
   var line = mixed
-    ? H('שני חלקי המדידה נקראו על ידי מודלים שונים, כי המכסה של הראשון נגמרה באמצע.')
-    : H('המדידה נעשתה על ידי מודל גיבוי, כי המכסה של המודל הראשי נגמרה.');
+    ? H('שני חלקי המדידה נקראו על ידי מודלים שונים. שתי המחציות של הציון הזה לא נמדדו באותו כלי.')
+    : H('המדידה לא נעשתה על ידי המודל החזק ביותר שהמפתח שלך מגיע אליו, אלא על ידי מודל גיבוי.');
   return '<div class="tt-vd-more"><b>' + escapeHtml(H('שים לב למספר הזה')) + '</b> ' +
     escapeHtml(line + ' ' +
-      H('הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל. המתן דקה והרץ שוב כדי לקבל מדידה להשוואה.')) +
+      H('הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל, ובהתאמה בין שתי שפות ההבדל יכול להיות גדול. אם זה חוזר על עצמו, אפס את מודל המדידה בהגדרות והרץ שוב.')) +
+    ' <button type="button" id="btnResetMeasureInline" class="tt-btn tt-btn-sm" style="padding:2px 9px;font-size:.7rem">' +
+    escapeHtml(H('אפס את מודל המדידה')) + '</button>' +
     '</div>';
+}
+
+/* v39.10. Forgetting the remembered instrument, by hand.
+
+   Nothing is deleted that the candidate would miss: the API key stays, the
+   model list stays, the run stays. All this drops is one note saying which
+   model answered last time, and the next measurement picks the instrument again
+   from the top of the cascade. */
+function ttResetMeasureModel() {
+  ttForgetMeasureModel();
+  setStatus(H('מודל המדידה אופס. המדידה הבאה תיבחר מחדש, מהמודל החזק ביותר שהמפתח שלך מגיע אליו.'));
 }
 
 /* What is missing, said with its own name. The three blocks answer three
@@ -9886,6 +9995,8 @@ function renderMatchVerdict() {
     ttVerdictAdvice(v));
   var cp = $('btnCopyMeasure');
   if (cp) cp.addEventListener('click', ttCopyMeasurement);
+  var rm = $('btnResetMeasureInline');
+  if (rm) rm.addEventListener('click', ttResetMeasureModel);
 }
 
 
@@ -16047,6 +16158,7 @@ function bindUi() {
   $('btnGetKey').addEventListener('click', openAiStudio);
   $('btnModalGetKey').addEventListener('click', openAiStudio);
   $('btnRemoveKey').addEventListener('click', function () { ttRemoveKeyFlow(); });
+  $('btnResetMeasureModel').addEventListener('click', ttResetMeasureModel);
   /* The save button only exists while there is something to save. */
   var cvBox = $('resumeInput');
   if (cvBox) cvBox.addEventListener('input', function () {
@@ -17225,6 +17337,8 @@ function renderFitDelta() {
      nothing at all when it was clicked here. */
   var cp = el.querySelector('#btnCopyMeasure');
   if (cp) cp.addEventListener('click', ttCopyMeasurement);
+  var rm = el.querySelector('#btnResetMeasureInline');
+  if (rm) rm.addEventListener('click', ttResetMeasureModel);
 }
 
 function ttTouchedReqIds() {
@@ -18409,6 +18523,10 @@ var TT_I18N = (function () {
     ['בדוק חיבור', 'اختبر الاتصال', 'Test connection', 'Tester la connexion', 'Probar la conexión', 'Verbindung testen', 'Prova la connessione', 'Testar a conexão', 'Testiraj vezu', 'Проверить соединение', '接続をテスト', 'कनेक्शन जाँचें']);
   put('btn.get_key', '#btnGetKey',
     ['🔑 קבל מפתח API בחינם', '🔑 احصل على مفتاح API مجاني', '🔑 Get a free API key', '🔑 Obtenir une clé API gratuite', '🔑 Consigue una clave API gratis', '🔑 Kostenlosen API-Schlüssel holen', '🔑 Ottieni una chiave API gratuita', '🔑 Obtenha uma chave de API gratuita', '🔑 Nabavi besplatan API ključ', '🔑 Получить бесплатный ключ API', '🔑 無料の API キーを取得', '🔑 मुफ़्त API कुंजी लें']);
+  put('btn.reset_measure', '#btnResetMeasureModel',
+    ['🔄 אפס את מודל המדידה', '🔄 إعادة ضبط نموذج القياس', '🔄 Reset the measuring model', '🔄 Réinitialiser le modèle de mesure', '🔄 Restablecer el modelo de medición', '🔄 Messmodell zurücksetzen', '🔄 Reimposta il modello di misura', '🔄 Redefinir o modelo de medição', '🔄 Poništi model mjerenja', '🔄 Сбросить модель измерения', '🔄 測定モデルをリセット', '🔄 मापन मॉडल रीसेट करें']);
+  put('settings.reset_measure_hint', '#resetMeasureHint',
+    ['האפליקציה זוכרת איזה מודל של Google Gemini ביצע את המדידה, כדי ששתי הרצות יהיו ברות השוואה. אם ציוני ההתאמה נראים נמוכים מהרגיל, לחצו כאן והמדידה הבאה תיבחר מחדש מהמודל החזק ביותר שהמפתח שלכם מגיע אליו. המפתח עצמו לא נמחק.', 'يتذكّر التطبيق أي نموذج من Google Gemini نفّذ القياس، كي تبقى عمليتا تشغيل قابلتين للمقارنة. إذا بدت درجات المطابقة أدنى من المعتاد، اضغطوا هنا وسيُختار القياس التالي من جديد من أقوى نموذج يصل إليه مفتاحكم. المفتاح نفسه لا يُحذف.', 'The app remembers which Google Gemini model took the measurement, so that two runs stay comparable. If the fit scores look lower than usual, press here and the next measurement will be chosen again from the strongest model your key can reach. The key itself is not deleted.', 'L\'application retient quel modèle Google Gemini a effectué la mesure, afin que deux exécutions restent comparables. Si les scores d\'adéquation paraissent plus bas que d\'habitude, appuyez ici : la prochaine mesure sera à nouveau choisie parmi le modèle le plus puissant accessible à votre clé. La clé elle-même n\'est pas supprimée.', 'La aplicación recuerda qué modelo de Google Gemini realizó la medición, para que dos ejecuciones sigan siendo comparables. Si las puntuaciones de ajuste parecen más bajas de lo habitual, pulsa aquí y la próxima medición se elegirá de nuevo entre el modelo más potente al que llegue tu clave. La clave en sí no se borra.', 'Die App merkt sich, welches Google-Gemini-Modell die Messung vorgenommen hat, damit zwei Durchläufe vergleichbar bleiben. Wirken die Passungswerte niedriger als sonst, klicken Sie hier: Die nächste Messung wird erneut aus dem stärksten Modell gewählt, das Ihr Schlüssel erreicht. Der Schlüssel selbst wird nicht gelöscht.', 'L\'app ricorda quale modello di Google Gemini ha eseguito la misura, così due esecuzioni restano confrontabili. Se i punteggi di corrispondenza sembrano più bassi del solito, premi qui e la prossima misura sarà scelta di nuovo fra il modello più potente che la tua chiave raggiunge. La chiave stessa non viene cancellata.', 'O app lembra qual modelo do Google Gemini fez a medição, para que duas execuções continuem comparáveis. Se as pontuações de adequação parecerem mais baixas que o normal, clique aqui e a próxima medição será escolhida de novo entre o modelo mais forte que a sua chave alcança. A chave em si não é apagada.', 'Aplikacija pamti koji je model Google Geminija obavio mjerenje, kako bi dva pokretanja ostala usporediva. Ako rezultati podudarnosti izgledaju niže nego inače, pritisnite ovdje i sljedeće će mjerenje ponovno biti odabrano iz najjačeg modela do kojega vaš ključ doseže. Sam ključ se ne briše.', 'Приложение запоминает, какая модель Google Gemini выполнила измерение, чтобы два запуска оставались сопоставимыми. Если оценки соответствия выглядят ниже обычного, нажмите здесь — следующее измерение будет выбрано заново из самой сильной модели, доступной вашему ключу. Сам ключ не удаляется.', 'このアプリは、どの Google Gemini モデルが測定を行ったかを記憶しています。二回の実行を比較できるようにするためです。適合スコアがいつもより低く見えるときは、ここを押してください。次の測定は、あなたのキーが到達できるもっとも強いモデルから選び直されます。キー自体は削除されません。', 'ऐप याद रखता है कि माप किस Google Gemini मॉडल ने किया, ताकि दो बार चलाने पर तुलना संभव रहे। यदि मिलान के अंक सामान्य से कम दिखें, तो यहाँ दबाएँ — अगला माप फिर से उस सबसे सशक्त मॉडल से चुना जाएगा जिस तक आपकी कुंजी पहुँचती है। कुंजी स्वयं नहीं मिटती।']);
   put('btn.remove_key', '#btnRemoveKey',
     ['🗑️ הסר מפתח', '🗑️ إزالة المفتاح', '🗑️ Remove key', '🗑️ Retirer la clé', '🗑️ Quitar la clave',
      '🗑️ Schlüssel entfernen', '🗑️ Rimuovi chiave', '🗑️ Remover chave', '🗑️ Ukloni ključ',
@@ -19177,6 +19295,15 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'שני חלקי המדידה נקראו על ידי מודלים שונים. שתי המחציות של הציון הזה לא נמדדו באותו כלי.':['قرأ جزأي القياس نموذجان مختلفان. لم يُقَس نصفا هذه الدرجة بالأداة نفسها.','The two halves of the measurement were read by different models. They were not taken with the same instrument.','Les deux moitiés de la mesure ont été lues par des modèles différents. Elles n\'ont pas été prises avec le même instrument.','Las dos mitades de la medición fueron leídas por modelos distintos. No se tomaron con el mismo instrumento.','Die beiden Hälften der Messung wurden von verschiedenen Modellen gelesen. Sie stammen nicht vom selben Instrument.','Le due metà della misura sono state lette da modelli diversi. Non sono state prese con lo stesso strumento.','As duas metades da medição foram lidas por modelos diferentes. Não foram feitas com o mesmo instrumento.','Dvije polovice mjerenja pročitala su različita modela. Nisu snimljene istim instrumentom.','Две половины измерения прочитаны разными моделями. Они сняты не одним и тем же инструментом.','測定の二つの部分は、それぞれ別のモデルが読み取りました。同じ計器で測られていません。','माप के दोनों हिस्से अलग-अलग मॉडलों ने पढ़े। ये एक ही उपकरण से नहीं लिए गए।'],
+'המדידה לא נעשתה על ידי המודל החזק ביותר שהמפתח שלך מגיע אליו, אלא על ידי מודל גיבוי.':['لم يُجرِ القياس أقوى نموذج يصل إليه مفتاحك، بل نموذج احتياطي.','The measurement was not taken by the strongest model your key can reach, but by a backup model.','La mesure n\'a pas été effectuée par le modèle le plus puissant accessible à votre clé, mais par un modèle de secours.','La medición no la hizo el modelo más potente al que llega tu clave, sino un modelo de reserva.','Die Messung stammt nicht vom stärksten Modell, das Ihr Schlüssel erreicht, sondern von einem Ersatzmodell.','La misura non è stata presa dal modello più potente che la tua chiave raggiunge, ma da un modello di riserva.','A medição não foi feita pelo modelo mais forte que a sua chave alcança, e sim por um modelo reserva.','Mjerenje nije obavio najjači model do kojega vaš ključ doseže, nego rezervni model.','Измерение выполнила не самая сильная модель, доступная вашему ключу, а резервная.','この測定は、あなたのキーが到達できるもっとも強いモデルではなく、予備のモデルが行いました。','यह माप उस सबसे सशक्त मॉडल ने नहीं किया जिस तक आपकी कुंजी पहुँचती है, बल्कि एक बैकअप मॉडल ने किया।'],
+'הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל, ובהתאמה בין שתי שפות ההבדל יכול להיות גדול. אם זה חוזר על עצמו, אפס את מודל המדידה בהגדרות והרץ שוב.':['قد تختلف الدرجة عن تشغيل جرى على النموذج المعتاد، وفي المطابقة بين لغتين قد يكون الفارق كبيرًا. إذا تكرّر ذلك، أعِد ضبط نموذج القياس في الإعدادات وشغّل مرة أخرى.','The score may differ from a run taken on the usual model, and when the resume and the posting are in different languages the difference can be large. If this keeps happening, reset the measuring model in Settings and run again.','Le score peut différer d\'une exécution faite sur le modèle habituel, et lorsque le CV et l\'offre sont dans des langues différentes l\'écart peut être important. Si cela se répète, réinitialisez le modèle de mesure dans les Réglages et relancez.','La puntuación puede diferir de una ejecución hecha con el modelo habitual, y cuando el currículum y la oferta están en idiomas distintos la diferencia puede ser grande. Si se repite, restablece el modelo de medición en Ajustes y vuelve a ejecutar.','Der Wert kann von einem Durchlauf auf dem üblichen Modell abweichen, und wenn Lebenslauf und Stelle in verschiedenen Sprachen verfasst sind, kann der Unterschied groß sein. Wiederholt sich das, setzen Sie das Messmodell in den Einstellungen zurück und starten Sie erneut.','Il punteggio può differire da un\'esecuzione fatta sul modello abituale, e quando il CV e l\'annuncio sono in lingue diverse la differenza può essere ampia. Se si ripete, reimposta il modello di misura nelle Impostazioni ed esegui di nuovo.','A pontuação pode diferir de uma execução feita no modelo habitual, e quando o currículo e a vaga estão em idiomas diferentes a diferença pode ser grande. Se isso se repetir, redefina o modelo de medição nas Configurações e execute de novo.','Rezultat se može razlikovati od pokretanja na uobičajenom modelu, a kad su životopis i oglas na različitim jezicima razlika može biti velika. Ako se ponavlja, poništite model mjerenja u Postavkama i pokrenite ponovno.','Оценка может отличаться от запуска на обычной модели, а когда резюме и вакансия написаны на разных языках, разница может быть большой. Если это повторяется, сбросьте модель измерения в настройках и запустите снова.','このスコアは、通常のモデルで行った実行とは異なる場合があります。履歴書と求人が別の言語で書かれているときは、差が大きくなることがあります。繰り返すようなら、設定で測定モデルをリセットして、もう一度実行してください。','यह अंक सामान्य मॉडल पर किए गए रन से भिन्न हो सकता है, और जब बायोडाटा तथा पद अलग-अलग भाषाओं में हों तो अंतर बड़ा हो सकता है। यदि ऐसा बार-बार हो, तो सेटिंग्स में मापन मॉडल रीसेट करें और फिर से चलाएँ।'],
+'אפס את מודל המדידה':['إعادة ضبط نموذج القياس','Reset the measuring model','Réinitialiser le modèle de mesure','Restablecer el modelo de medición','Messmodell zurücksetzen','Reimposta il modello di misura','Redefinir o modelo de medição','Poništi model mjerenja','Сбросить модель измерения','測定モデルをリセット','मापन मॉडल रीसेट करें'],
+'מודל המדידה אופס. המדידה הבאה תיבחר מחדש, מהמודל החזק ביותר שהמפתח שלך מגיע אליו.':['أُعيد ضبط نموذج القياس. سيُختار القياس التالي من جديد، من أقوى نموذج يصل إليه مفتاحك.','The measuring model has been reset. The next measurement will be chosen again, from the strongest model your key can reach.','Le modèle de mesure a été réinitialisé. La prochaine mesure sera à nouveau choisie parmi le modèle le plus puissant accessible à votre clé.','El modelo de medición se ha restablecido. La próxima medición se elegirá de nuevo, entre el modelo más potente al que llegue tu clave.','Das Messmodell wurde zurückgesetzt. Die nächste Messung wird erneut gewählt, aus dem stärksten Modell, das Ihr Schlüssel erreicht.','Il modello di misura è stato reimpostato. La prossima misura sarà scelta di nuovo, fra il modello più potente che la tua chiave raggiunge.','O modelo de medição foi redefinido. A próxima medição será escolhida de novo, entre o modelo mais forte que a sua chave alcança.','Model mjerenja je poništen. Sljedeće će mjerenje ponovno biti odabrano iz najjačeg modela do kojega vaš ključ doseže.','Модель измерения сброшена. Следующее измерение будет выбрано заново — из самой сильной модели, доступной вашему ключу.','測定モデルをリセットしました。次の測定は、あなたのキーが到達できるもっとも強いモデルから選び直されます。','मापन मॉडल रीसेट कर दिया गया। अगला माप फिर से उस सबसे सशक्त मॉडल से चुना जाएगा जिस तक आपकी कुंजी पहुँचती है।'],
+'למה יש כפתור "אפס את מודל המדידה"':['لماذا يوجد زر "إعادة ضبط نموذج القياس"','Why there is a "Reset the measuring model" button','Pourquoi il existe un bouton « Réinitialiser le modèle de mesure »','Por qué hay un botón «Restablecer el modelo de medición»','Warum es eine Schaltfläche „Messmodell zurücksetzen" gibt','Perché c\'è un pulsante «Reimposta il modello di misura»','Por que existe um botão "Redefinir o modelo de medição"','Zašto postoji gumb "Poništi model mjerenja"','Почему есть кнопка «Сбросить модель измерения»','「測定モデルをリセット」ボタンがある理由','"मापन मॉडल रीसेट करें" बटन क्यों है'],
+'לגוגל יש כמה מודלים של Gemini, והם לא באותה עוצמה. האפליקציה תמיד מנסה את החזק ביותר שהמפתח שלכם מגיע אליו, וזוכרת מי ענה, כדי שציון שקיבלתם היום וציון שתקבלו בשבוע הבא יימדדו באותו כלי. השוואה בין שני מספרים שנמדדו בשני מודלים שונים היא לא באמת השוואה.':['لدى غوغل عدّة نماذج من Gemini، وهي ليست بالقوة نفسها. يحاول التطبيق دائمًا أقوى نموذج يصل إليه مفتاحكم، ويتذكّر مَن أجاب، كي تُقاس درجة حصلتم عليها اليوم ودرجة تحصلون عليها الأسبوع المقبل بالأداة نفسها. المقارنة بين رقمين قِيسا بنموذجين مختلفين ليست مقارنة حقيقية.','Google offers several Gemini models, and they are not equally strong. The app always tries the strongest one your key can reach, and it remembers which one answered, so that a score you got today and a score you get next week were taken with the same instrument. Comparing two numbers measured by two different models is not really comparing anything.','Google propose plusieurs modèles Gemini, et ils ne sont pas de force égale. L\'application essaie toujours le plus puissant auquel votre clé accède, et retient lequel a répondu, afin qu\'un score obtenu aujourd\'hui et un score obtenu la semaine prochaine soient pris avec le même instrument. Comparer deux nombres mesurés par deux modèles différents ne compare rien du tout.','Google ofrece varios modelos Gemini, y no son igual de potentes. La aplicación siempre prueba el más potente al que llegue tu clave y recuerda cuál respondió, para que una puntuación de hoy y otra de la semana que viene se tomen con el mismo instrumento. Comparar dos números medidos por dos modelos distintos no es comparar de verdad.','Google bietet mehrere Gemini-Modelle an, und sie sind nicht gleich stark. Die App versucht immer das stärkste, das Ihr Schlüssel erreicht, und merkt sich, welches geantwortet hat, damit ein Wert von heute und einer von nächster Woche mit demselben Instrument entstehen. Zwei Zahlen zu vergleichen, die von zwei verschiedenen Modellen gemessen wurden, vergleicht in Wahrheit nichts.','Google offre diversi modelli Gemini, e non sono tutti ugualmente potenti. L\'app prova sempre il più potente che la tua chiave raggiunge e ricorda quale ha risposto, così un punteggio di oggi e uno della settimana prossima sono presi con lo stesso strumento. Confrontare due numeri misurati da due modelli diversi non è davvero un confronto.','O Google oferece vários modelos Gemini, e eles não têm a mesma força. O app sempre tenta o mais forte que a sua chave alcança e lembra qual respondeu, para que uma pontuação de hoje e outra da semana que vem sejam feitas com o mesmo instrumento. Comparar dois números medidos por dois modelos diferentes não é comparar de verdade.','Google nudi nekoliko modela Geminija i nisu jednako snažni. Aplikacija uvijek pokušava najjači do kojega vaš ključ doseže i pamti koji je odgovorio, kako bi rezultat od danas i onaj od sljedećeg tjedna bili snimljeni istim instrumentom. Uspoređivati dva broja izmjerena dvama različitim modelima zapravo nije usporedba.','У Google есть несколько моделей Gemini, и они не одинаково сильны. Приложение всегда пробует самую сильную, доступную вашему ключу, и запоминает, какая ответила, чтобы оценка, полученная сегодня, и оценка на следующей неделе были сняты одним инструментом. Сравнивать два числа, измеренные разными моделями, — это не сравнение.','Google には Gemini のモデルがいくつかあり、その力は同じではありません。このアプリは、あなたのキーが到達できるもっとも強いモデルを常に試し、どれが応答したかを記憶します。今日の点数と来週の点数を、同じ計器で測るためです。異なる二つのモデルで測った数字を比べても、実際には何も比べたことになりません。','Google के पास Gemini के कई मॉडल हैं, और वे समान रूप से सशक्त नहीं हैं। ऐप हमेशा उस सबसे सशक्त मॉडल को आज़माता है जिस तक आपकी कुंजी पहुँचती है, और याद रखता है कि किसने उत्तर दिया — ताकि आज मिला अंक और अगले सप्ताह मिलने वाला अंक एक ही उपकरण से लिए जाएँ। दो भिन्न मॉडलों से मापे गए दो अंकों की तुलना वास्तव में कोई तुलना नहीं है।'],
+'הבעיה היא שאם המודל החזק היה עמוס בדיוק באותו רגע, מודל חלש יותר עונה ונשמר במקומו. מאותו רגע כל מדידה נעשית בכלי החלש יותר, וציוני ההתאמה יוצאים נמוכים בלי ששום דבר על המסך יסביר למה. זה בולט במיוחד כשקורות החיים והמשרה כתובים בשתי שפות שונות, כי שם ההתאמה דורשת את הקריאה העמוקה ביותר.':['المشكلة أنه إذا كان النموذج القوي مشغولًا في تلك اللحظة بالذات، يجيب نموذج أضعف ويُحفظ مكانه. ومن تلك اللحظة يجري كل قياس بالأداة الأضعف، وتخرج درجات المطابقة منخفضة دون أن يشرح شيء على الشاشة السبب. ويظهر ذلك بوضوح خاص حين تكون السيرة الذاتية والوظيفة بلغتين مختلفتين، لأن المطابقة هناك تتطلب أعمق قراءة.','The catch is that if the strong model happened to be busy at that one moment, a weaker one answers and gets remembered in its place. From then on every measurement is taken with the weaker instrument, and the fit scores come out lower without anything on screen saying why. It shows up most on a resume and a posting written in different languages, where matching the two takes the most reading.','Le piège, c\'est que si le modèle puissant se trouvait occupé à cet instant précis, un modèle plus faible répond et se retrouve mémorisé à sa place. Dès lors, chaque mesure est prise avec l\'instrument le plus faible, et les scores d\'adéquation ressortent plus bas sans que rien à l\'écran n\'en explique la raison. Cela se voit surtout quand le CV et l\'offre sont écrits dans des langues différentes, car la mise en correspondance y demande la lecture la plus fine.','El problema es que si el modelo potente estaba ocupado justo en ese momento, responde uno más débil y queda memorizado en su lugar. A partir de ahí toda medición se toma con el instrumento más débil, y las puntuaciones de ajuste salen más bajas sin que nada en pantalla explique por qué. Se nota sobre todo cuando el currículum y la oferta están escritos en idiomas distintos, porque ahí la correspondencia exige la lectura más profunda.','Der Haken ist: War das starke Modell genau in diesem Moment ausgelastet, antwortet ein schwächeres und wird an seiner Stelle gemerkt. Von da an entsteht jede Messung mit dem schwächeren Instrument, und die Passungswerte fallen niedriger aus, ohne dass irgendetwas auf dem Bildschirm den Grund nennt. Am deutlichsten zeigt sich das bei einem Lebenslauf und einer Stelle in verschiedenen Sprachen, weil der Abgleich dort das genaueste Lesen verlangt.','Il problema è che se il modello potente era occupato proprio in quel momento, risponde uno più debole e viene ricordato al suo posto. Da lì in poi ogni misura è presa con lo strumento più debole, e i punteggi di corrispondenza escono più bassi senza che nulla sullo schermo ne spieghi il motivo. Si vede soprattutto quando il CV e l\'annuncio sono scritti in lingue diverse, perché lì l\'abbinamento richiede la lettura più attenta.','O problema é que, se o modelo forte estava ocupado exatamente naquele momento, um mais fraco responde e fica memorizado no lugar dele. A partir daí toda medição é feita com o instrumento mais fraco, e as pontuações de adequação saem mais baixas sem que nada na tela explique por quê. Isso aparece sobretudo quando o currículo e a vaga estão escritos em idiomas diferentes, porque ali a correspondência exige a leitura mais profunda.','Kvaka je u tome što, ako je jaki model baš u tom trenutku bio zauzet, odgovori slabiji i bude zapamćen na njegovu mjestu. Od tada se svako mjerenje obavlja slabijim instrumentom, a rezultati podudarnosti ispadaju niži, a da ništa na zaslonu ne objasni zašto. Najviše se to vidi kad su životopis i oglas napisani na različitim jezicima, jer ondje uparivanje traži najpomnije čitanje.','Загвоздка в том, что если сильная модель как раз в тот момент была занята, отвечает более слабая и запоминается вместо неё. С этого момента каждое измерение снимается более слабым инструментом, и оценки соответствия выходят ниже, причём ничто на экране не объясняет почему. Заметнее всего это на резюме и вакансии, написанных на разных языках: там сопоставление требует самого внимательного чтения.','やっかいなのは、ちょうどその瞬間に強いモデルが混み合っていると、弱いモデルが応答し、そのまま記憶されてしまうことです。それ以降、測定はすべて弱い計器で行われ、適合スコアは低く出ます。しかも、その理由は画面のどこにも書かれていません。履歴書と求人が別々の言語で書かれている場合にもっとも顕著です。そこでは、突き合わせにもっとも深い読みが要るからです。','अड़चन यह है कि यदि ठीक उसी क्षण सशक्त मॉडल व्यस्त हो, तो कोई कमज़ोर मॉडल उत्तर देता है और उसी की जगह याद रख लिया जाता है। उसके बाद हर माप उसी कमज़ोर उपकरण से होता है, और मिलान के अंक कम आते हैं — जबकि स्क्रीन पर कुछ भी इसका कारण नहीं बताता। यह सबसे अधिक तब दिखता है जब बायोडाटा और पद अलग-अलग भाषाओं में लिखे हों, क्योंकि वहाँ मिलान के लिए सबसे गहरी पढ़ाई चाहिए।'],
+'הכפתור בהגדרות מוחק את הרישום הזה. שום דבר אחר לא נוגע: המפתח שלכם, קורות החיים והקבצים השמורים נשארים בדיוק במקומם, והמדידה הבאה פשוט בוחרת מודל מחדש מלמעלה. האפליקציה גם שוכחת את הרישום מעצמה פעם ביום, ובודקת בכל מדידה אם בינתיים התפנה מודל חזק יותר.':['الزر في الإعدادات يمحو هذا التسجيل. لا شيء آخر يُمَس: مفتاحكم وسيرتكم الذاتية والملفات المحفوظة تبقى في مكانها تمامًا، والقياس التالي يختار نموذجًا من جديد من الأعلى. كما ينسى التطبيق هذا التسجيل من تلقاء نفسه مرة في اليوم، ويتحقّق في كل قياس ممّا إذا كان قد توفّر في هذه الأثناء نموذج أقوى.','The button in Settings drops that note. Nothing else is touched: your key, your resume and your saved files all stay exactly where they are, and the next measurement simply picks the model again from the top. The app also forgets the note by itself once a day, and checks on every measurement whether a stronger model has become available since.','Le bouton dans les Réglages efface cette note. Rien d\'autre n\'est touché : votre clé, votre CV et vos fichiers enregistrés restent exactement où ils sont, et la mesure suivante choisit simplement un modèle à nouveau depuis le haut. L\'application oublie aussi cette note d\'elle-même une fois par jour, et vérifie à chaque mesure si un modèle plus puissant s\'est libéré entre-temps.','El botón de Ajustes borra ese registro. No se toca nada más: tu clave, tu currículum y tus archivos guardados se quedan exactamente donde están, y la próxima medición simplemente elige modelo otra vez desde arriba. La aplicación también olvida el registro por sí sola una vez al día, y comprueba en cada medición si mientras tanto se ha liberado un modelo más potente.','Die Schaltfläche in den Einstellungen löscht diesen Vermerk. Sonst wird nichts angerührt: Ihr Schlüssel, Ihr Lebenslauf und Ihre gespeicherten Dateien bleiben genau, wo sie sind, und die nächste Messung wählt das Modell einfach wieder von oben. Die App vergisst den Vermerk außerdem einmal täglich von selbst und prüft bei jeder Messung, ob inzwischen ein stärkeres Modell verfügbar geworden ist.','Il pulsante nelle Impostazioni cancella quell\'annotazione. Nient\'altro viene toccato: la tua chiave, il tuo CV e i file salvati restano esattamente dove sono, e la misura successiva sceglie di nuovo il modello dall\'alto. L\'app dimentica inoltre l\'annotazione da sola una volta al giorno, e a ogni misura verifica se nel frattempo si è liberato un modello più potente.','O botão nas Configurações apaga esse registro. Nada mais é tocado: a sua chave, o seu currículo e os seus arquivos salvos ficam exatamente onde estão, e a próxima medição simplesmente escolhe o modelo de novo, a partir do topo. O app também esquece o registro sozinho uma vez por dia, e verifica a cada medição se nesse meio-tempo surgiu um modelo mais forte.','Gumb u Postavkama briše tu zabilješku. Ništa se drugo ne dira: vaš ključ, vaš životopis i spremljene datoteke ostaju točno gdje jesu, a sljedeće mjerenje jednostavno ponovno bira model od vrha. Aplikacija usto sama zaboravlja zabilješku jednom dnevno i pri svakom mjerenju provjerava je li u međuvremenu postao dostupan jači model.','Кнопка в настройках стирает эту запись. Больше ничего не затрагивается: ваш ключ, ваше резюме и сохранённые файлы остаются ровно на месте, а следующее измерение просто выбирает модель заново, сверху. Кроме того, приложение само забывает запись раз в сутки и при каждом измерении проверяет, не освободилась ли за это время более сильная модель.','設定にあるボタンは、この記録を消します。ほかには何も触れません。キーも、履歴書も、保存したファイルも、そのままの場所に残り、次の測定はただ上からモデルを選び直すだけです。アプリは一日に一度、自分でもこの記録を忘れ、測定のたびに、その間に強いモデルが空いていないかを確かめます。','सेटिंग्स का यह बटन उस नोट को हटा देता है। और कुछ नहीं छुआ जाता: आपकी कुंजी, आपका बायोडाटा और सहेजी गई फ़ाइलें ठीक अपनी जगह रहती हैं, और अगला माप बस ऊपर से फिर मॉडल चुन लेता है। ऐप दिन में एक बार यह नोट स्वयं भी भुला देता है, और हर माप पर जाँचता है कि इस बीच कोई अधिक सशक्त मॉडल उपलब्ध हुआ या नहीं।'],
 'בלי תקציר':['بلا ملخّص','No summary','Sans résumé','Sin resumen','Ohne Kurzprofil','Senza sintesi','Sem resumo','Bez sažetka','Без резюме','要約なし','सारांश नहीं'],
 'ההצעה למשרה הזו':['الاقتراح لهذه الوظيفة','The proposal for this posting','La proposition pour cette offre','La propuesta para esta oferta','Der Vorschlag für diese Stelle','La proposta per questo annuncio','A proposta para esta vaga','Prijedlog za ovaj oglas','Предложение для этой вакансии','この求人向けの提案','इस पद के लिए प्रस्ताव'],
 'בקורות החיים שהעלית':['في السيرة الذاتية التي رفعتها','In the resume you uploaded','Dans le CV que vous avez importé','En el currículum que subiste','In dem Lebenslauf, den Sie hochgeladen haben','Nel CV che hai caricato','No currículo que você enviou','U životopisu koji ste učitali','В загруженном вами резюме','アップロードした履歴書では','आपके अपलोड किए बायोडाटा में'],
@@ -20784,6 +20911,14 @@ function renderAbout() {
     : H('למה אין מפתח מובנה באפליקציה? משתי סיבות. כך קורות החיים שלכם עוברים ישירות מהדפדפן שלכם לגוגל, בלי לעבור דרך שום שרת אמצעי, וכך אף אחד לא משלם על השימוש של מישהו אחר.')) + '</p><p>' + (en
     ? 'The "Get a free API key" button on the main screen opens Google\'s page and walks you through it step by step.'
     : H('הכפתור "קבל מפתח API בחינם" במסך הראשי פותח את הדף של גוגל ומלווה אתכם שלב אחר שלב.')) + '</p></div>';
+
+  h += '<div class="tt-about-sec"><h4>📏 ' + (en ? 'Why there is a "Reset the measuring model" button' : H('למה יש כפתור "אפס את מודל המדידה"')) + '</h4><p>' + (en
+    ? 'Google offers several Gemini models, and they are not equally strong. The app always tries the strongest one your key can reach, and it remembers which one answered, so that a score you got today and a score you get next week were taken with the same instrument. Comparing two numbers measured by two different models is not really comparing anything.'
+    : H('לגוגל יש כמה מודלים של Gemini, והם לא באותה עוצמה. האפליקציה תמיד מנסה את החזק ביותר שהמפתח שלכם מגיע אליו, וזוכרת מי ענה, כדי שציון שקיבלתם היום וציון שתקבלו בשבוע הבא יימדדו באותו כלי. השוואה בין שני מספרים שנמדדו בשני מודלים שונים היא לא באמת השוואה.')) + '</p><p>' + (en
+    ? 'The catch is that if the strong model happened to be busy at that one moment, a weaker one answers and gets remembered in its place. From then on every measurement is taken with the weaker instrument, and the fit scores come out lower without anything on screen saying why. It shows up most on a resume and a posting written in different languages, where matching the two takes the most reading.'
+    : H('הבעיה היא שאם המודל החזק היה עמוס בדיוק באותו רגע, מודל חלש יותר עונה ונשמר במקומו. מאותו רגע כל מדידה נעשית בכלי החלש יותר, וציוני ההתאמה יוצאים נמוכים בלי ששום דבר על המסך יסביר למה. זה בולט במיוחד כשקורות החיים והמשרה כתובים בשתי שפות שונות, כי שם ההתאמה דורשת את הקריאה העמוקה ביותר.')) + '</p><p>' + (en
+    ? 'The button in Settings drops that note. Nothing else is touched: your key, your resume and your saved files all stay exactly where they are, and the next measurement simply picks the model again from the top. The app also forgets the note by itself once a day, and checks on every measurement whether a stronger model has become available since.'
+    : H('הכפתור בהגדרות מוחק את הרישום הזה. שום דבר אחר לא נוגע: המפתח שלכם, קורות החיים והקבצים השמורים נשארים בדיוק במקומם, והמדידה הבאה פשוט בוחרת מודל מחדש מלמעלה. האפליקציה גם שוכחת את הרישום מעצמה פעם ביום, ובודקת בכל מדידה אם בינתיים התפנה מודל חזק יותר.')) + '</p></div>';
 
   h += '<div class="tt-about-sec"><h4>🔒 ' + (en ? 'Privacy and your data' : H('פרטיות וביטחון המידע')) + '</h4><p>' + (en
     ? 'A resume is personal, so here is exactly what happens to it.'
