@@ -2506,7 +2506,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.8';
+var TT_VERSION = 'v39.9';
 
 var APP = {
   apiKey: '',
@@ -6300,6 +6300,12 @@ function promptCoverage(surgeonText, signals, uiLang, fullResume) {
     '  unknown     the resume simply does not say, and its silence proves nothing either way',
     '  missing     the resume relates to nothing here',
     '',
+    'THE POSTING AND THE RESUME MAY BE WRITTEN IN DIFFERENT LANGUAGES, AND WHEN THEY ARE, THAT IS NOT A GAP.',
+    'A term in another language is the SAME TERM. "system maintenance" is "\\u05ea\\u05d7\\u05d6\\u05d5\\u05e7\\u05ea \\u05de\\u05e2\\u05e8\\u05db\\u05d5\\u05ea", "end users" is "\\u05de\\u05e9\\u05ea\\u05de\\u05e9\\u05d9 \\u05e7\\u05e6\\u05d4", "maintenance des systemes" is both. Translate before you judge, then judge exactly as you would have judged inside one language.',
+    'A resume that names the thing in its own language has NAMED IT: that is direct, not equivalent. Never downgrade a status by one step because the candidate wrote in another language, and never write missing on a requirement whose subject is plainly there under a translated name.',
+    'Product, standard and certification names usually survive translation unchanged and are compared as they are written: SAP is SAP in every language.',
+    'The only thing a language difference is evidence of is the language the candidate writes in. It is evidence about nothing else, and a requirement of kind language is the one place it is allowed to matter at all.',
+    '',
     'WHICH STATUSES ARE EVEN AVAILABLE DEPENDS ON THE REQUIREMENT KIND. This is the part that gets done wrong.',
     '',
     ' kind = certification',
@@ -7129,6 +7135,28 @@ function normalizeSignals(obj) {
     });
     if (!kws.length) kws = [String(r.text).trim()];
     if (kws.length > 6) kws = kws.slice(0, 6);
+    /* v39.9. Decision 13's other half, which was never here.
+
+       promptSignals asks the model for keywords_doc - the same keywords written
+       in the language of the resume - precisely so that a Hebrew posting can be
+       matched against an English resume. The merge below reads the field,
+       ttReqKeywords merges it, and this object never carried it: it was dropped
+       three lines after it arrived, and every reader downstream saw undefined.
+
+       Measured on one resume translated one to one, against one Hebrew posting:
+       kwOverlap 33 per cent in Hebrew and 0 per cent in English, which cost the
+       equivalent rows a third of their value and pulled the must have gate down
+       with them. Filtered exactly like the list above, because a translated
+       "experience" is as empty as the original. */
+    var kwsDoc = [], dseen = {};
+    (Array.isArray(r.keywords_doc) ? r.keywords_doc : []).forEach(function (k) {
+      var s = String(k || '').trim();
+      var dn = normalizeToken(s);
+      if (!s || !dn || dseen[dn] || isStopTerm(s)) return;
+      dseen[dn] = 1;
+      kwsDoc.push(s);
+    });
+    if (kwsDoc.length > 6) kwsDoc = kwsDoc.slice(0, 6);
     out.push({
       id: id,
       text: String(r.text).trim(),
@@ -7137,7 +7165,11 @@ function normalizeSignals(obj) {
       // what the model thinks this requirement is worth, 0 to 100. Only one of
       // the three inputs to the significance score, see termWeight().
       weight: typeof r.weight === 'number' ? Math.max(0, Math.min(100, r.weight)) : null,
-      keywords: kws
+      keywords: kws,
+      /* Deliberately NOT folded into keywords. The two lists are used under
+         different conditions and merging them here would make that impossible
+         to undo further down. */
+      keywords_doc: kwsDoc
     });
   });
   return {
@@ -7254,7 +7286,7 @@ function ttMergeDuplicateRequirements(sig) {
       copy.must_have = base.must_have || absorbed.some(function (r) { return r.must_have; });
       copy.weight = Math.max.apply(null, [base.weight || 0].concat(
         absorbed.map(function (r) { return r.weight || 0; })));
-      copy.keywords = ttReqKeywords(base).slice();
+      copy.keywords = (base.keywords || []).slice();
       copy.keywords_doc = (base.keywords_doc || []).slice();
       absorbed.forEach(function (r) {
         (r.keywords || []).forEach(function (k) { if (copy.keywords.indexOf(k) === -1) copy.keywords.push(k); });
@@ -8334,9 +8366,37 @@ function resumeNames(term) {
   return !!t && countTerm(resumeHaystack(), t) > 0;
 }
 
+/* v39.9. Are the two documents written in different languages at all.
+
+   The whole doc language keyword mechanism is switched on this one question,
+   and it answers false whenever it cannot tell. That direction is deliberate:
+   a same language pairing must score exactly what it scored before this change,
+   and the safe failure is the one that changes nothing. */
+function ttCrossLanguage() {
+  try {
+    var d = currentDocLang(), j = currentJobLang();
+    return !!d && !!j && d !== j;
+  } catch (e) { return false; }
+}
+
 function keywordHitRate(req) {
   var words = (req && Array.isArray(req.keywords)) ? req.keywords.filter(Boolean) : [];
   if (!words.length) return null;
+  /* v39.9. When the posting and the resume are in different languages, the
+     posting's own words are absent from the resume BY CONSTRUCTION, and this
+     number - which decides how well supported a transferable argument is - was
+     coming back as a flat zero for every requirement. Not "unknown": zero,
+     which is worse than having no keywords at all, because a requirement with
+     no keywords returns null and is priced neutrally.
+
+     So the twin list the model already writes in the resume's language is
+     searched alongside the original, and a hit on either counts. Only when the
+     languages really differ, so no same language pairing moves. */
+  if (ttCrossLanguage() && req && Array.isArray(req.keywords_doc)) {
+    req.keywords_doc.forEach(function (k) {
+      if (k && words.indexOf(k) === -1) words.push(k);
+    });
+  }
   /* Deliberately the uploaded document and not resumeHaystack(), which the
      second measurement points at the finished file. This number decides how
      well supported a transferable argument is, and a rewrite that sprinkles the
@@ -12863,9 +12923,11 @@ function langLockPanel() {
    posting without the candidate having to guess which words to use. */
 function ttReqKeywords(r) {
   var out = (r.keywords || []).slice();
-  (r.keywords_doc || []).forEach(function (k) {
-    if (k && out.indexOf(k) === -1) out.push(k);
-  });
+  if (ttCrossLanguage()) {
+    (r.keywords_doc || []).forEach(function (k) {
+      if (k && out.indexOf(k) === -1) out.push(k);
+    });
+  }
   if (!out.length && r.text) out.push(r.text);
   return out;
 }
