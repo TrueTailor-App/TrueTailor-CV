@@ -1971,7 +1971,7 @@
 
   <!-- SETTINGS / API KEY -->
   <section id="settingsCard" class="tt-card mb-4">
-    <h2 class="tt-card-title mb-3">מפתח API של Google Gemini</h2>
+    <h2 class="tt-card-title mb-3">מפתח API של Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(בדוק חיבור לפני תחילת העבודה)</span></h2>
     <div class="flex flex-wrap gap-2 items-center">
       <input id="apiKeyInput" type="password" placeholder="הדבק כאן את המפתח" aria-label="מפתח Google Gemini API" dir="ltr"
              class="tt-field flex-1 min-w-[240px] font-mono" style="padding:9px 12px">
@@ -2506,7 +2506,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.6';
+var TT_VERSION = 'v39.8';
 
 var APP = {
   apiKey: '',
@@ -7768,9 +7768,24 @@ function summaryBrief(doc) {
 
   var form = shape.format === 'bullets' || (!shape.exists && want === 'bullets')
     ? ['SHAPE: BULLETS. BETWEEN FOUR AND SIX of them, one line each, each carrying one thing this posting screens for.',
-       'The number is chosen by this posting, not by filling a quota. Four is the floor and six is the ceiling. A fifth and a sixth are written ONLY when each of them carries a requirement from the top of the priority list that none of the others already carries. Four that each land beat six that dilute each other, and a bullet that is there to round the list out is not there.']
+       'THE NUMBER IS DECIDED BY THIS POSTING AND BY NOTHING ELSE. Four is the floor, six is the ceiling, and neither one is a target to reach. If four bullets already cover everything this posting screens for and this file proves, write four and stop: a fifth added to fill out the list weakens the four above it. If this posting screens for six separate things and the file proves all six, write six and do not drop one to look shorter. The only bullet that is never allowed is the one that survived because the list looked thin.']
     : ['SHAPE: ONE PARAGRAPH. FOUR TO SIX LINES. Not a list of nouns and not a mission statement: who this person is professionally, what they have run, and why that answers this posting.',
-       'Four is the floor and six is the ceiling, and the fifth and sixth lines are written only when each carries something from the top of the priority list that the earlier ones could not hold. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.'];
+       'THE NUMBER IS DECIDED BY THIS POSTING AND BY NOTHING ELSE. Four is the floor, six is the ceiling, and neither one is a target to reach. The fifth and sixth lines are written only when each carries something from the top of the priority list that the earlier ones could not hold. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.'];
+
+  /* ---------- HOW IT IS WRITTEN, v39.7 ----------
+     The rules above say what the summary is made of. These say how it reads,
+     and they apply to the default version and to the alternative equally.
+     None of them licences a new claim: an active verb in front of a fact that
+     is already in the file is still that fact, and a term borrowed from the
+     posting is only borrowed when the document already proves the thing it
+     names. */
+  form.push('');
+  form.push('KEEPING THE COUNT IS NOT KEEPING THE SENTENCES. If six lines are the right number here, that does not mean the six the candidate wrote. Every one of them is re-aimed at THIS posting: the requirement it answers is named in the posting\'s own words, the detail that matters to this employer stays, and the detail that matters to no employer in particular goes. A line that reads the same after the rewrite as it did before was not tailored, it was copied.');
+  form.push('VOICE: ACTIVE, AND IT IS THE CANDIDATE SPEAKING. "ניהלתי", "הובלתי", "הייתי אחראי על", "ביצעתי", "הקמתי" - the thing they did, in the first person, the way they would say it in the room. Not "אחראיות על", not "ניסיון בניהול", not a noun phrase describing a job that somebody held. Do not write the pronoun "אני" where the verb already carries the person; in languages that do not conjugate for person, use the plain first person the resume already uses.');
+  form.push('This is a change of VOICE and never a change of FACT. "ניסיון בניהול צוות של 12" becomes "ניהלתי צוות של 12" and nothing else moves. If the file does not say who did the thing, the thing does not become theirs.');
+  form.push('TENSE: the current role in the present, everything finished in the past, and the dates in the file decide which is which. A responsibility they still hold is not written as something they used to do, and a role that ended is not written as though it is still running.');
+  form.push('THE POSTING\'S OWN WORDS: where the resume already proves a requirement, name it with the term the POSTING uses for it, not with the candidate\'s synonym. That is the whole point of a tailored summary and it is what a screening pass is looking for. Where the resume does not prove it, the term does not appear at all - a keyword with nothing behind it is the one thing that costs an interview rather than winning one.');
+  form.push('LANGUAGE QUALITY: correct spelling, correct grammar, natural word order for the language of the resume. Full sentences that a person would say out loud. No line that reads as though it was generated: no "בעל יכולות מוכחות", no "אוריינטציה תוצאתית", no adjective stack, no sentence that would be equally true of anybody in this occupation.');
   if (shape.exists) {
     form.push('The candidate wrote their summary in this shape and it stays in this shape. Do not convert it.');
     form.push('It may get SHORTER than what they wrote. If their summary runs long, keep the claims that answer this posting and drop the ones that answer no posting in particular. Losing a true sentence that this employer has no use for is a gain, not a loss.');
@@ -7804,8 +7819,10 @@ function summaryBrief(doc) {
        'The shape the candidate already uses goes in "lines", exactly as every other section does, and it stays the default.',
        'The other shape goes in the SEPARATE key "summary_alt", with format "' + want + '".',
        want === 'bullets'
-         ? 'AS BULLETS: four to six, and each one is a REASON THIS CANDIDATE IS RIGHT FOR THIS JOB, not a duty they held. Take the strongest points the file supports, work down the priority list from the top, and stop when the next bullet would only be filling a slot. A fifth and a sixth earn their place only by carrying something none of the others carry.'
-         : 'AS A PARAGRAPH: four to six tight lines that answer one question, which is why this person fits THIS posting better than the next applicant. Not a career history and not a list of nouns joined by commas.',
+         ? 'AS BULLETS: FIVE of them, and never fewer than four. Each one is a REASON THIS CANDIDATE IS RIGHT FOR THIS JOB, not a duty they held, and each one is written in the active first person: "ניהלתי", "הקמתי", "הייתי אחראי על". Take the strongest points the file supports and work down the priority list from the top.\n' +
+           'IF THE FILE WILL NOT SUPPORT A FIFTH POINT, DO NOT INVENT ONE. Instead take one of the points you already have that carries two different things and SPLIT IT INTO TWO BULLETS, one for each. A point about running a team across three sites is a bullet about the team and a bullet about the sites, and both were already true. Splitting adds no claim; inventing does, and inventing is forbidden here as it is everywhere else in this file. If nothing can honestly be split either, return four.\n' +
+           'The candidate\'s whole summary has to be represented across these bullets. Nothing they said about themselves that this posting cares about may be dropped on the way into the list.'
+         : 'AS A PARAGRAPH: four to six tight lines that answer one question, which is why this person fits THIS posting better than the next applicant. Not a career history and not a list of nouns joined by commas. Active first person throughout: what they ran, what they built, what they were responsible for.',
        'Same facts, same claims, different form and different emphasis. Not one claim may appear here that is not already proved by a line elsewhere in the document, and nothing may appear that is not in the default version above unless the file plainly supports it.',
        'Say in one sentence, in Hebrew, why this shape might suit this posting better. Address the candidate. Never tell them their own choice was wrong.']
     : [];
@@ -16425,7 +16442,9 @@ function buildSummaryGate() {
       baseLines: newCh.altLines.slice(), baseFormat: newCh.altFormat || 'paragraph',
       markers: null, altLines: null, altFormat: '', altWhy: '',
       shape: 'base', lines: newCh.altLines.slice(), format: newCh.altFormat || 'paragraph',
-      before: '', edited: false,
+      before: '', edited: false, editorOpen: false,
+      /* A section that did not exist is entirely proposal, by definition. */
+      hasProposal: true,
       /* A section the resume never had starts off, exactly as its card did. */
       decided: 'rejected', why: newCh.why || ''
     };
@@ -16464,11 +16483,48 @@ function buildSummaryGate() {
     lines: base.slice(),
     format: summaryShape(APP.doc).format || 'paragraph',
     before: cur.map(function (l) { return (l.marker || '') + l.text; }).join('\n'),
-    edited: false,
+    edited: false, editorOpen: false,
+    /* v39.7. THE FIELD THAT WAS MISSING.
+
+       "base" is not a proposal, it is whatever survived: each summary line
+       replaced by its rewrite if stage 4 produced one, and left exactly as the
+       candidate typed it if it did not. When no line was rewritten - the model
+       returned them unchanged, or the language lock ate the rewrites - base is
+       the candidate's own text, character for character, and the panel was
+       still labelling it "the proposal for this posting" and opening with it
+       selected. Pressing "use the proposed summary" then did nothing visible,
+       because what was proposed and what was already there were the same
+       sentences. Reproduced, and this flag is what stops it: with no rewrite
+       there is no proposal, the button is not drawn, and the panel says so. */
+    hasProposal: touched,
     /* A rewrite of a summary that already exists arrives on, which is what the
-       cards behind this screen did before it existed. */
-    decided: 'approved', why: ''
+       cards behind this screen did before it existed. When there is no rewrite
+       and the panel is only here to offer the other shape, nothing is selected
+       yet: the candidate's own summary stays, until they choose otherwise. */
+    decided: touched ? 'approved' : 'rejected', why: ''
   };
+}
+
+/* Which of the three texts is currently going into the document. The panel
+   draws itself from this and from nothing else, so what is highlighted, what is
+   in the big box and what compileApproved will read can no longer disagree. */
+function summaryGatePick(g) {
+  if (!g || g.decided !== 'approved') return 'own';
+  return (g.shape === 'alt' && g.altLines && g.altLines.length) ? 'alt' : 'base';
+}
+
+function summaryGateSelectedText(g) {
+  if (!g) return '';
+  return summaryGatePick(g) === 'own' ? String(g.before || '') : summaryGateText(g);
+}
+
+/* Switching version throws away anything typed into the editor. That is what
+   "use the proposed summary always brings back the summary you proposed" means,
+   and it is the right behaviour - but it is not something to do silently to
+   text somebody wrote by hand. */
+function summaryGateMayDiscard(g) {
+  if (!g || !g.edited) return true;
+  return window.confirm(H('ערכת את התקציר ביד. מעבר לגרסה אחרת ימחק את מה שהקלדת ויחזיר את הנוסח המקורי שלה.\n\nלהמשיך?'));
 }
 
 function summaryGateShape(g, which) {
@@ -16491,24 +16547,53 @@ function renderSummaryGate() {
   var g = APP.summaryGate;
   if (!g) { el.innerHTML = ''; return; }
 
-  var on = g.decided === 'approved';
-  var text = summaryGateText(g);
-  var dir = dirForText(text || g.before, g.lang);
-  var head = (g.isNew ? g.heading + '\n' : '') + text;
+  /* ---------------------------------------------------------------------
+     v39.7. ONE CHOICE, MADE OUT OF THE TEXTS THAT ACTUALLY EXIST.
 
-  var toggle = '';
-  if (g.altLines && g.altLines.length) {
-    toggle = '<div class="flex flex-wrap items-center gap-2 mt-2">' +
-      '<span class="text-xs text-slate-600">' + H('מבנה:') + '</span>' +
-      '<button class="tt-sg text-xs px-2 py-1 rounded border ' +
-        (g.shape === 'base' ? 'border-slate-800 bg-white font-semibold' : 'border-slate-300 bg-white') +
-        '" data-act="shape-base">' + (g.baseFormat === 'bullets' ? H('בולטים (כפי שכתבת)') : H('פסקה (כפי שכתבת)')) + '</button>' +
-      '<button class="tt-sg text-xs px-2 py-1 rounded border ' +
-        (g.shape === 'alt' ? 'border-slate-800 bg-white font-semibold' : 'border-slate-300 bg-white') +
-        '" data-act="shape-alt">' + (g.altFormat === 'bullets' ? H('בולטים') : H('פסקה')) + '</button>' +
-      (g.altWhy ? '<span class="text-xs text-slate-500">' + escapeHtml(g.altWhy) + '</span>' : '') +
-      '</div>';
-  }
+     The panel used to carry two controls that decided the same thing from
+     two directions: a pair of buttons that turned the proposal on and off,
+     and a "structure" toggle underneath whose two options were labelled by
+     FORMAT - "paragraph (as you wrote it)" and "bullets". Neither label
+     said what it did. "Paragraph (as you wrote it)" is the proposal in the
+     shape the resume already uses, but it reads as "the paragraph you
+     wrote", which is exactly what a candidate who had switched to bullets
+     pressed in order to get their own text back. And once the proposal had
+     been turned off and on again, it came back in whichever structure
+     happened to be selected, not the one that had been proposed.
+
+     There are at most three texts here and now there are at most three
+     buttons, one per text, and the box shows the one that is selected:
+
+       the summary you wrote      - nothing changes
+       the proposal for this job  - drawn only when a rewrite actually exists
+       the other version          - drawn only when the model offered one
+
+     Pressing a version always restores that version as it was proposed,
+     which is what "use the proposed summary" was supposed to mean all along.
+     --------------------------------------------------------------------- */
+  var pick = summaryGatePick(g);
+  var on = pick !== 'own';
+  var sel = summaryGateSelectedText(g);
+  var dir = dirForText(sel || g.before, g.lang);
+  var hasAlt = !!(g.altLines && g.altLines.length);
+  var altIsBullets = g.altFormat === 'bullets';
+
+  /* The heading over the big box names the text under it. Without it the two
+     columns are two paragraphs of Hebrew and the candidate has to work out
+     which one is theirs. */
+  var pickName = pick === 'own'
+    ? (g.isNew ? H('בלי תקציר') : H('התקציר שלך'))
+    : (pick === 'alt'
+        ? (altIsBullets ? H('גרסת הבולטים') : H('גרסת הפסקה'))
+        : H('ההצעה למשרה הזו'));
+
+  var head = (pick !== 'own' && g.isNew ? g.heading + '\n' : '') + sel;
+
+  var noProposal = (!g.hasProposal && hasAlt)
+    ? '<div class="text-xs text-slate-700 bg-white border border-slate-300 rounded p-2 mb-2">' +
+      H('שלב הכתיבה לא שינה דבר בתקציר שכתבת, ולכן אין כאן הצעה בנוסח הקיים. הגרסה השנייה למטה היא ההצעה היחידה על המסך הזה.') +
+      '</div>'
+    : '';
 
   var before = g.isNew
     ? '<div class="text-xs text-slate-500 mb-1">' + H('בקורות החיים שהעלית') + '</div>' +
@@ -16518,11 +16603,36 @@ function renderSummaryGate() {
       '<div class="rounded p-2 bg-white border border-slate-200 text-slate-500 text-sm whitespace-pre-line" dir="' + dirForText(g.before, g.lang) + '">' +
       escapeHtml(g.before) + '</div>';
 
+  var box = (pick === 'own' && g.isNew)
+    ? '<div class="rounded p-2 bg-white border border-slate-300 text-slate-500 text-sm">' +
+      H('לא ייכנס סעיף תקציר.') + '</div>'
+    : '<div class="rounded p-2 bg-white border ' + (on ? 'border-amber-300' : 'border-slate-300') +
+      ' text-sm whitespace-pre-line" dir="' + dir + '">' + escapeHtml(head) + '</div>';
+
   var status = on
     ? '<span class="text-emerald-800 font-semibold">' +
-        (g.isNew ? H('התקציר המוצע ייכנס לקורות החיים.') : H('התקציר המוצע יחליף את התקציר הקיים.')) + '</span>'
+        (g.isNew ? H('התקציר המוצע ייכנס לקורות החיים.') : H('הגרסה שנבחרה תחליף את התקציר הקיים.')) + '</span>'
     : '<span class="text-slate-700 font-semibold">' +
         (g.isNew ? H('לא ייכנס תקציר. קורות החיים יישארו בלי סעיף תקציר.') : H('התקציר שכתבת יישאר בדיוק כפי שהוא.')) + '</span>';
+
+  function pillClass(active) {
+    return 'tt-sg text-xs px-3 py-1.5 rounded border ' +
+      (active ? 'border-slate-800 bg-slate-800 text-white font-semibold' : 'border-slate-300 bg-white hover:bg-slate-50');
+  }
+
+  var buttons =
+    '<button class="' + pillClass(pick === 'own') + '" data-act="keep">' +
+      (g.isNew ? H('בלי תקציר') : H('השאר את התקציר הקיים')) + '</button>' +
+    (g.hasProposal
+      ? '<button class="' + pillClass(pick === 'base') + '" data-act="use">' +
+          H('השתמש בתקציר המוצע') + '</button>'
+      : '') +
+    (hasAlt
+      ? '<button class="' + pillClass(pick === 'alt') + '" data-act="alt">' +
+          (altIsBullets ? H('השתמש בגרסת הבולטים') : H('השתמש בגרסת הפסקה')) + '</button>'
+      : '') +
+    '<button class="tt-sg text-xs px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50" data-act="edit">' +
+      H('ערוך את התקציר') + '</button>';
 
   el.innerHTML =
     '<div class="rounded-lg border-2 ' + (on ? 'border-amber-400' : 'border-slate-300') + ' bg-amber-50/60 p-3 mb-4">' +
@@ -16531,31 +16641,26 @@ function renderSummaryGate() {
       '<p class="text-xs text-slate-700 mb-2">' +
         H('מגייס מקדיש שניות ספורות לסריקה הראשונה, והתקציר הוא מה שהוא קורא בהן. ההצעה למטה בנויה אך ורק ממה שכבר כתוב בקורות החיים שלך, ומנוסחת מול הדרישות של המשרה הזו. אין בה אף טענה חדשה.') +
       '</p>' +
+      noProposal +
       '<div class="grid sm:grid-cols-2 gap-3">' +
         '<div>' + before + '</div>' +
-        '<div><div class="text-xs text-slate-500 mb-1">' + H('ההצעה למשרה הזו') + '</div>' +
-          '<div class="rounded p-2 bg-white border border-amber-300 text-sm whitespace-pre-line" dir="' + dir + '">' +
-            escapeHtml(head) + '</div></div>' +
+        '<div><div class="text-xs text-slate-500 mb-1">' + H('מה ייכנס לקורות החיים:') +
+          ' <b class="text-slate-700">' + pickName + '</b></div>' + box + '</div>' +
       '</div>' +
-      toggle +
-      '<div class="flex flex-wrap gap-2 mt-3">' +
-        '<button class="tt-sg text-xs px-3 py-1.5 rounded ' + (on ? 'bg-emerald-600 text-white' : 'border border-slate-300 bg-white hover:bg-slate-50') + '" data-act="use">' +
-          H('השתמש בתקציר המוצע') + '</button>' +
-        '<button class="tt-sg text-xs px-3 py-1.5 rounded ' + (!on ? 'bg-slate-700 text-white' : 'border border-slate-300 bg-white hover:bg-slate-50') + '" data-act="keep">' +
-          (g.isNew ? H('בלי תקציר') : H('השאר את התקציר הקיים')) + '</button>' +
-        '<button class="tt-sg text-xs px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50" data-act="edit">' +
-          H('ערוך את ההצעה') + '</button>' +
-      '</div>' +
+      (hasAlt && g.altWhy
+        ? '<div class="text-xs text-slate-500 mt-2">' + escapeHtml(g.altWhy) + '</div>'
+        : '') +
+      '<div class="flex flex-wrap gap-2 mt-3">' + buttons + '</div>' +
       '<div class="text-xs mt-2">' + status + '</div>' +
-      '<div class="tt-sg-editor tt-hidden mt-2">' +
+      '<div class="tt-sg-editor' + (g.editorOpen ? '' : ' tt-hidden') + ' mt-2">' +
         '<textarea class="w-full border border-slate-300 rounded-lg p-2 text-sm tt-line" rows="7" dir="' + dir + '">' +
-          escapeHtml(text) + '</textarea>' +
+          escapeHtml(sel) + '</textarea>' +
         '<div class="text-xs text-slate-500 mt-1">' +
           H('שורה אחת לכל בולט, או פסקה אחת ברצף. מה שיישאר כאן הוא מה שייכנס לקורות החיים, בלי בדיקה נוספת. עד 6 שורות.') + '</div>' +
         '<div class="flex gap-2 mt-1">' +
           '<button class="tt-sg text-xs px-2 py-1 rounded bg-blue-600 text-white" data-act="save">' + H('שמור והשתמש') + '</button>' +
           '<button class="tt-sg text-xs px-2 py-1 rounded border border-slate-300" data-act="cancel">' + H('בטל') + '</button>' +
-          '<button class="tt-sg text-xs px-2 py-1 rounded border border-slate-300" data-act="reset">' + H('חזור להצעה המקורית') + '</button>' +
+          '<button class="tt-sg text-xs px-2 py-1 rounded border border-slate-300" data-act="reset">' + H('שחזר את הנוסח המקורי') + '</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -16564,31 +16669,52 @@ function renderSummaryGate() {
 }
 
 function wireSummaryGate(el) {
-  var box = el.querySelector('.tt-sg-editor');
   var btns = el.querySelectorAll('.tt-sg');
   for (var i = 0; i < btns.length; i++) {
     btns[i].addEventListener('click', function (ev) {
       var g = APP.summaryGate;
       if (!g) return;
       var act = ev.currentTarget.getAttribute('data-act');
-      if (act === 'edit') { if (box) box.classList.remove('tt-hidden'); return; }
-      if (act === 'cancel') { if (box) box.classList.add('tt-hidden'); return; }
-      if (act === 'use') g.decided = 'approved';
-      else if (act === 'keep') g.decided = 'rejected';
-      else if (act === 'shape-base') summaryGateShape(g, 'base');
-      else if (act === 'shape-alt') summaryGateShape(g, 'alt');
-      else if (act === 'reset') { summaryGateShape(g, g.shape); }
-      else if (act === 'save') {
+
+      /* The editor is state now, not a class somebody toggled by hand. It used
+         to be opened by removing tt-hidden from the live node, which meant any
+         other button closed it again on the next repaint - including "restore
+         the original wording", whose entire job is to refill the box the
+         candidate is looking at. */
+      if (act === 'edit')   { g.editorOpen = true;  renderReview(); return; }
+      if (act === 'cancel') { g.editorOpen = false; renderReview(); return; }
+
+      if (act === 'keep') {
+        if (!summaryGateMayDiscard(g)) return;
+        summaryGateShape(g, g.shape);
+        g.decided = 'rejected';
+      } else if (act === 'use') {
+        if (!summaryGateMayDiscard(g)) return;
+        summaryGateShape(g, 'base');
+        g.decided = 'approved';
+      } else if (act === 'alt') {
+        if (!summaryGateMayDiscard(g)) return;
+        summaryGateShape(g, 'alt');
+        g.decided = 'approved';
+      } else if (act === 'reset') {
+        if (!summaryGateMayDiscard(g)) return;
+        summaryGateShape(g, g.shape);
+      } else if (act === 'save') {
         var ta = el.querySelector('.tt-sg-editor textarea');
         var raw = ta ? String(ta.value || '') : '';
         var lines = raw.split('\n').map(function (t) {
           return sanitizeAiText(String(t).replace(/^\s*[\u2022\u25CF\u00B7\-\u2013*]\s*/, '').trim(), g.lang);
         }).filter(function (t) { return t; }).slice(0, TT_SUMMARY_MAX_LINES);
         if (!lines.length) { showError(H('לא נשאר טקסט בתקציר, ולכן העריכה לא נשמרה.')); return; }
+        /* Editing while the candidate's own summary is selected is editing
+           their own summary, and saving it means it enters the document. The
+           shape goes back to the one the section is really in, so the bullet
+           marks of the original lines are the ones that get written. */
+        if (summaryGatePick(g) === 'own') g.shape = 'base';
         g.lines = lines;
         g.edited = true;
         g.decided = 'approved';
-        if (box) box.classList.add('tt-hidden');
+        g.editorOpen = false;
       }
       renderReview();
     });
@@ -18212,7 +18338,7 @@ var TT_I18N = (function () {
   put('btn.onboard_open', '#btnOnboardOpen',
     ['פתח את אזור המפתח', 'افتح لوحة المفتاح', 'Open the key panel', 'Ouvrir le panneau de la clé', 'Abrir el panel de la clave', 'Schlüsselbereich öffnen', 'Apri il pannello della chiave', 'Abrir o painel da chave', 'Otvori ploču s ključem', 'Открыть панель ключа', 'キーのパネルを開く', 'कुंजी पैनल खोलें']);
   put('settings.title', '#settingsCard .tt-card-title',
-    ['מפתח API של Google Gemini', 'مفتاح Google Gemini API', 'Google Gemini API key', 'Clé API Google Gemini', 'Clave API de Google Gemini', 'Google Gemini API-Schlüssel', 'Chiave API Google Gemini', 'Chave da API Google Gemini', 'Google Gemini API ključ', 'Ключ Google Gemini API', 'Google Gemini API キー', 'Google Gemini API कुंजी']);
+    ['מפתח API של Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(בדוק חיבור לפני תחילת העבודה)</span>', 'مفتاح Google Gemini API <span class="text-sm font-normal" style="color:var(--c-mute)">(اختبر الاتصال قبل بدء العمل)</span>', 'Google Gemini API key <span class="text-sm font-normal" style="color:var(--c-mute)">(Test the connection before you start)</span>', 'Clé API Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(Testez la connexion avant de commencer)</span>', 'Clave API de Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(Prueba la conexión antes de empezar)</span>', 'Google Gemini API-Schlüssel <span class="text-sm font-normal" style="color:var(--c-mute)">(Verbindung testen, bevor Sie beginnen)</span>', 'Chiave API Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(Prova la connessione prima di iniziare)</span>', 'Chave da API Google Gemini <span class="text-sm font-normal" style="color:var(--c-mute)">(Teste a conexão antes de começar)</span>', 'Google Gemini API ključ <span class="text-sm font-normal" style="color:var(--c-mute)">(Testirajte vezu prije početka rada)</span>', 'Ключ Google Gemini API <span class="text-sm font-normal" style="color:var(--c-mute)">(Проверьте соединение перед началом работы)</span>', 'Google Gemini API キー <span class="text-sm font-normal" style="color:var(--c-mute)">(作業を始める前に接続をテスト)</span>', 'Google Gemini API कुंजी <span class="text-sm font-normal" style="color:var(--c-mute)">(काम शुरू करने से पहले कनेक्शन जाँचें)</span>']);
   put('settings.persist', '#keyPersistToggle + span',
     ['זכור את המפתח במחשב הזה', 'تذكّر المفتاح على هذا الجهاز', 'Remember the key on this computer', 'Mémoriser la clé sur cet ordinateur', 'Recordar la clave en este equipo', 'Schlüssel auf diesem Computer merken', 'Ricorda la chiave su questo computer', 'Lembrar a chave neste computador', 'Zapamti ključ na ovom računalu', 'Запомнить ключ на этом компьютере', 'このパソコンにキーを保存する', 'इस कंप्यूटर पर कुंजी याद रखें']);
   put('btn.save_key', '#btnSaveKey',
@@ -18989,6 +19115,34 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'בלי תקציר':['بلا ملخّص','No summary','Sans résumé','Sin resumen','Ohne Kurzprofil','Senza sintesi','Sem resumo','Bez sažetka','Без резюме','要約なし','सारांश नहीं'],
+'ההצעה למשרה הזו':['الاقتراح لهذه الوظيفة','The proposal for this posting','La proposition pour cette offre','La propuesta para esta oferta','Der Vorschlag für diese Stelle','La proposta per questo annuncio','A proposta para esta vaga','Prijedlog za ovaj oglas','Предложение для этой вакансии','この求人向けの提案','इस पद के लिए प्रस्ताव'],
+'בקורות החיים שהעלית':['في السيرة الذاتية التي رفعتها','In the resume you uploaded','Dans le CV que vous avez importé','En el currículum que subiste','In dem Lebenslauf, den Sie hochgeladen haben','Nel CV che hai caricato','No currículo que você enviou','U životopisu koji ste učitali','В загруженном вами резюме','アップロードした履歴書では','आपके अपलोड किए बायोडाटा में'],
+'אין תקציר מקצועי. זה סעיף חדש שייכנס מתחת לפרטי הקשר.':['لا يوجد ملخّص مهني. هذا قسم جديد سيُدرج تحت معلومات الاتصال.','There is no professional summary. This is a new section that will go in under the contact details.','Il n\'y a pas de résumé professionnel. C\'est une nouvelle rubrique qui sera placée sous les coordonnées.','No hay resumen profesional. Es una sección nueva que irá debajo de los datos de contacto.','Es gibt kein Kurzprofil. Dies ist ein neuer Abschnitt, der unter die Kontaktdaten kommt.','Non c\'è una sintesi professionale. È una sezione nuova che andrà sotto i recapiti.','Não há resumo profissional. Esta é uma seção nova que entrará abaixo dos dados de contato.','Nema profesionalnog sažetka. Ovo je novi odjeljak koji će doći ispod kontakt podataka.','Профессионального резюме нет. Это новый раздел, который встанет под контактными данными.','職務要約がありません。これは連絡先の下に入る新しいセクションです。','कोई व्यावसायिक सारांश नहीं है। यह नया अनुभाग है जो संपर्क विवरण के नीचे आएगा।'],
+'התקציר שלך, כפי שכתבת אותו':['ملخّصك، كما كتبته','Your summary, exactly as you wrote it','Votre résumé, tel que vous l\'avez écrit','Tu resumen, tal como lo escribiste','Ihr Kurzprofil, genau so, wie Sie es geschrieben haben','La tua sintesi, esattamente come l\'hai scritta','Seu resumo, exatamente como você escreveu','Vaš sažetak, točno kako ste ga napisali','Ваше резюме — ровно так, как вы его написали','あなたが書いたままの要約','आपका सारांश, जैसा आपने लिखा'],
+'התקציר המוצע ייכנס לקורות החיים.':['سيدخل الملخّص المقترح إلى السيرة الذاتية.','The proposed summary will go into the resume.','Le résumé proposé entrera dans le CV.','El resumen propuesto entrará en el currículum.','Das vorgeschlagene Kurzprofil kommt in den Lebenslauf.','La sintesi proposta entrerà nel CV.','O resumo proposto entrará no currículo.','Predloženi sažetak ući će u životopis.','Предложенное резюме войдёт в документ.','提案された要約が履歴書に入ります。','प्रस्तावित सारांश बायोडाटा में जाएगा।'],
+'לא ייכנס תקציר. קורות החיים יישארו בלי סעיף תקציר.':['لن يدخل أي ملخّص. ستبقى السيرة الذاتية بلا قسم ملخّص.','No summary will go in. The resume will stay without a summary section.','Aucun résumé n\'entrera. Le CV restera sans rubrique de résumé.','No entrará ningún resumen. El currículum quedará sin sección de resumen.','Es kommt kein Kurzprofil hinein. Der Lebenslauf bleibt ohne Kurzprofil-Abschnitt.','Non entrerà alcuna sintesi. Il CV resterà senza sezione di sintesi.','Nenhum resumo entrará. O currículo ficará sem seção de resumo.','Nijedan sažetak neće ući. Životopis će ostati bez odjeljka sažetka.','Резюме не будет добавлено. Документ останется без раздела с резюме.','要約は入りません。履歴書は要約のセクションなしのままです。','कोई सारांश नहीं जाएगा। बायोडाटा सारांश अनुभाग के बिना रहेगा।'],
+'התקציר שכתבת יישאר בדיוק כפי שהוא.':['سيبقى الملخّص الذي كتبته كما هو تمامًا.','The summary you wrote will stay exactly as it is.','Le résumé que vous avez écrit restera exactement tel quel.','El resumen que escribiste quedará exactamente como está.','Das Kurzprofil, das Sie geschrieben haben, bleibt genau so.','La sintesi che hai scritto resterà esattamente com\'è.','O resumo que você escreveu ficará exatamente como está.','Sažetak koji ste napisali ostat će točno takav kakav jest.','Написанное вами резюме останется в точности таким же.','あなたが書いた要約は、そのまま残ります。','आपका लिखा सारांश ठीक वैसा ही रहेगा।'],
+'השאר את התקציר הקיים':['أبقِ الملخّص الحالي','Keep the existing summary','Conserver le résumé actuel','Conservar el resumen actual','Vorhandenes Kurzprofil behalten','Mantieni la sintesi attuale','Manter o resumo atual','Zadrži postojeći sažetak','Оставить текущее резюме','今の要約のままにする','मौजूदा सारांश रखें'],
+'השתמש בתקציר המוצע':['استخدم الملخّص المقترح','Use the proposed summary','Utiliser le résumé proposé','Usar el resumen propuesto','Vorgeschlagenes Kurzprofil verwenden','Usa la sintesi proposta','Usar o resumo proposto','Koristi predloženi sažetak','Использовать предложенное резюме','提案された要約を使う','प्रस्तावित सारांश उपयोग करें'],
+'התקציר המקצועי':['الملخّص المهني','The professional summary','Le résumé professionnel','El resumen profesional','Das Kurzprofil','La sintesi professionale','O resumo profissional','Profesionalni sažetak','Профессиональное резюме','職務要約','व्यावसायिक सारांश'],
+'(נערך על ידך)':['(حرّرته بنفسك)','(edited by you)','(modifié par vous)','(editado por ti)','(von Ihnen bearbeitet)','(modificata da te)','(editado por você)','(uredili ste vi)','(изменено вами)','（あなたが編集）','(आपके द्वारा संपादित)'],
+'מגייס מקדיש שניות ספורות לסריקה הראשונה, והתקציר הוא מה שהוא קורא בהן. ההצעה למטה בנויה אך ורק ממה שכבר כתוב בקורות החיים שלך, ומנוסחת מול הדרישות של המשרה הזו. אין בה אף טענה חדשה.':['يمنح الموظّف المسؤول عن التوظيف ثوانٍ قليلة للمسح الأول، والملخّص هو ما يقرأه فيها. الاقتراح أدناه مبني حصريًا مما هو مكتوب فعلًا في سيرتك الذاتية، ومصاغ في مواجهة متطلبات هذه الوظيفة. لا يحتوي على أي ادعاء جديد.','A recruiter gives the first scan a few seconds, and the summary is what they read in them. The proposal below is built only out of what your resume already says, worded against the requirements of this posting. It contains no new claim.','Un recruteur consacre quelques secondes au premier survol, et c\'est le résumé qu\'il y lit. La proposition ci-dessous est construite uniquement à partir de ce que votre CV dit déjà, formulée face aux exigences de cette offre. Elle ne contient aucune affirmation nouvelle.','Un reclutador dedica unos segundos a la primera lectura, y el resumen es lo que lee en ellos. La propuesta de abajo está construida solo con lo que tu currículum ya dice, redactada frente a los requisitos de esta oferta. No contiene ninguna afirmación nueva.','Eine Personalauswahl verbringt mit dem ersten Überfliegen wenige Sekunden, und in diesen liest sie das Kurzprofil. Der Vorschlag unten besteht ausschließlich aus dem, was Ihr Lebenslauf bereits sagt, formuliert gegen die Anforderungen dieser Stelle. Er enthält keine neue Behauptung.','Un selezionatore dedica alla prima scorsa pochi secondi, e in quelli legge la sintesi. La proposta qui sotto è costruita soltanto da ciò che il tuo CV già dice, formulata rispetto ai requisiti di questo annuncio. Non contiene alcuna affermazione nuova.','Um recrutador dedica poucos segundos à primeira leitura, e o resumo é o que ele lê nesses segundos. A proposta abaixo é construída apenas com o que o seu currículo já diz, redigida diante dos requisitos desta vaga. Não contém nenhuma alegação nova.','Regruter prvom pregledu posvećuje nekoliko sekundi, a u njima čita sažetak. Prijedlog ispod izgrađen je isključivo od onoga što vaš životopis već govori, formuliran prema zahtjevima ovog oglasa. Ne sadrži nijednu novu tvrdnju.','Рекрутер тратит на первый просмотр считаные секунды, и в них он читает именно резюме. Предложение ниже построено только из того, что уже написано в вашем документе, и сформулировано под требования этой вакансии. Ни одного нового утверждения в нём нет.','採用担当者が最初のひと目にかける時間は数秒で、その数秒で読むのが要約です。下の提案は、あなたの履歴書にすでに書かれていることだけで組み立て、この求人の要件に合わせて言い直したものです。新しい主張は一つもありません。','भर्तीकर्ता पहली नज़र को कुछ ही सेकंड देता है, और उन्हीं में वह सारांश पढ़ता है। नीचे का प्रस्ताव केवल उसी से बना है जो आपके बायोडाटा में पहले से लिखा है, और इस पद की आवश्यकताओं के सामने शब्दबद्ध किया गया है। इसमें कोई नया दावा नहीं है।'],
+'שורה אחת לכל בולט, או פסקה אחת ברצף. מה שיישאר כאן הוא מה שייכנס לקורות החיים, בלי בדיקה נוספת. עד 6 שורות.':['سطر واحد لكل نقطة، أو فقرة واحدة متصلة. ما يبقى هنا هو ما سيدخل السيرة الذاتية، دون فحص إضافي. حتى 6 أسطر.','One line per bullet, or one continuous paragraph. Whatever is left here is what goes into the resume, with no further checking. Up to 6 lines.','Une ligne par puce, ou un seul paragraphe continu. Ce qui reste ici est ce qui entrera dans le CV, sans autre vérification. Jusqu\'à 6 lignes.','Una línea por viñeta, o un solo párrafo seguido. Lo que quede aquí es lo que entrará en el currículum, sin más comprobación. Hasta 6 líneas.','Eine Zeile je Aufzählungspunkt oder ein durchgehender Absatz. Was hier stehen bleibt, kommt ohne weitere Prüfung in den Lebenslauf. Bis zu 6 Zeilen.','Una riga per ogni punto, oppure un unico paragrafo di seguito. Quello che resta qui è ciò che entrerà nel CV, senza altri controlli. Fino a 6 righe.','Uma linha por marcador, ou um único parágrafo corrido. O que ficar aqui é o que entrará no currículo, sem nenhuma verificação a mais. Até 6 linhas.','Jedan redak po natuknici, ili jedan neprekinuti odlomak. Ono što ovdje ostane ulazi u životopis, bez dodatne provjere. Do 6 redaka.','По одной строке на пункт или один сплошной абзац. То, что здесь останется, попадёт в резюме без дополнительной проверки. До 6 строк.','箇条書きは一項目につき一行、または続きの一段落。ここに残したものが、追加の確認なしにそのまま履歴書へ入ります。最大 6 行。','हर बुलेट के लिए एक पंक्ति, या एक सतत अनुच्छेद। यहाँ जो बचेगा वही बायोडाटा में जाएगा, बिना किसी और जाँच के। अधिकतम 6 पंक्तियाँ।'],
+'שמור והשתמש':['احفظ واستخدم','Save and use','Enregistrer et utiliser','Guardar y usar','Speichern und verwenden','Salva e usa','Salvar e usar','Spremi i koristi','Сохранить и использовать','保存して使う','सहेजें और उपयोग करें'],
+'לא נשאר טקסט בתקציר, ולכן העריכה לא נשמרה.':['لم يبقَ نص في الملخّص، لذلك لم يُحفظ التعديل.','No text was left in the summary, so the edit was not saved.','Il ne restait aucun texte dans le résumé, la modification n\'a donc pas été enregistrée.','No quedó texto en el resumen, así que la edición no se guardó.','Im Kurzprofil blieb kein Text übrig, daher wurde die Bearbeitung nicht gespeichert.','Non è rimasto testo nella sintesi, quindi la modifica non è stata salvata.','Não restou texto no resumo, portanto a edição não foi salva.','U sažetku nije ostao tekst, pa uređivanje nije spremljeno.','В резюме не осталось текста, поэтому правка не сохранена.','要約に文字が残らなかったため、編集は保存されませんでした。','सारांश में कोई पाठ नहीं बचा, इसलिए संपादन सहेजा नहीं गया।'],
+'התקציר שלך':['ملخّصك','Your summary','Votre résumé','Tu resumen','Ihr Kurzprofil','La tua sintesi','Seu resumo','Vaš sažetak','Ваше резюме','あなたの要約','आपका सारांश'],
+'גרסת הבולטים':['نسخة النقاط','The bulleted version','La version en puces','La versión en viñetas','Die Aufzählungsversion','La versione a elenco puntato','A versão em marcadores','Verzija s natuknicama','Вариант списком','箇条書き版','बुलेट वाला रूप'],
+'גרסת הפסקה':['نسخة الفقرة','The paragraph version','La version en paragraphe','La versión en párrafo','Die Absatzversion','La versione a paragrafo','A versão em parágrafo','Verzija u odlomku','Вариант абзацем','段落版','अनुच्छेद वाला रूप'],
+'השתמש בגרסת הבולטים':['استخدم نسخة النقاط','Use the bulleted version','Utiliser la version en puces','Usar la versión en viñetas','Aufzählungsversion verwenden','Usa la versione a elenco puntato','Usar a versão em marcadores','Koristi verziju s natuknicama','Использовать вариант списком','箇条書き版を使う','बुलेट वाला रूप उपयोग करें'],
+'השתמש בגרסת הפסקה':['استخدم نسخة الفقرة','Use the paragraph version','Utiliser la version en paragraphe','Usar la versión en párrafo','Absatzversion verwenden','Usa la versione a paragrafo','Usar a versão em parágrafo','Koristi verziju u odlomku','Использовать вариант абзацем','段落版を使う','अनुच्छेद वाला रूप उपयोग करें'],
+'ערוך את התקציר':['حرّر الملخّص','Edit the summary','Modifier le résumé','Editar el resumen','Kurzprofil bearbeiten','Modifica la sintesi','Editar o resumo','Uredi sažetak','Изменить резюме','要約を編集','सारांश संपादित करें'],
+'מה ייכנס לקורות החיים:':['ما الذي سيدخل السيرة الذاتية:','What goes into the resume:','Ce qui entrera dans le CV :','Lo que entrará en el currículum:','Was in den Lebenslauf kommt:','Che cosa entrerà nel CV:','O que entrará no currículo:','Što ulazi u životopis:','Что попадёт в резюме:','履歴書に入るもの：','बायोडाटा में क्या जाएगा:'],
+'שחזר את הנוסח המקורי':['استعد الصياغة الأصلية','Restore the original wording','Rétablir la formulation d\'origine','Restaurar la redacción original','Ursprüngliche Formulierung wiederherstellen','Ripristina la formulazione originale','Restaurar a redação original','Vrati izvornu formulaciju','Вернуть исходную формулировку','元の文面に戻す','मूल शब्दांकन बहाल करें'],
+'לא ייכנס סעיף תקציר.':['لن يدخل قسم ملخّص.','No summary section will be added.','Aucune rubrique de résumé ne sera ajoutée.','No se añadirá ninguna sección de resumen.','Es wird kein Kurzprofil aufgenommen.','Non verrà inserita alcuna sezione di sintesi.','Nenhuma seção de resumo será incluída.','Neće biti dodan odjeljak sažetka.','Раздел с резюме добавлен не будет.','要約のセクションは追加されません。','सारांश अनुभाग नहीं जोड़ा जाएगा।'],
+'הגרסה שנבחרה תחליף את התקציר הקיים.':['ستحل النسخة المختارة محل الملخّص الحالي.','The selected version will replace the existing summary.','La version choisie remplacera le résumé existant.','La versión elegida sustituirá al resumen actual.','Die gewählte Version ersetzt das vorhandene Kurzprofil.','La versione scelta sostituirà la sintesi esistente.','A versão escolhida substituirá o resumo atual.','Odabrana verzija zamijenit će postojeći sažetak.','Выбранный вариант заменит существующее резюме.','選んだ版が既存の要約と入れ替わります。','चुना गया रूप मौजूदा सारांश की जगह लेगा।'],
+'שלב הכתיבה לא שינה דבר בתקציר שכתבת, ולכן אין כאן הצעה בנוסח הקיים. הגרסה השנייה למטה היא ההצעה היחידה על המסך הזה.':['لم تغيّر مرحلة الكتابة شيئًا في ملخّصك، لذلك لا يوجد هنا اقتراح بالصياغة الحالية. النسخة الثانية أدناه هي الاقتراح الوحيد في هذه الشاشة.','The writing stage changed nothing in the summary you wrote, so there is no proposal here in its existing wording. The second version below is the only proposal on this screen.','L\'étape de rédaction n\'a rien changé au résumé que vous avez écrit ; il n\'y a donc pas de proposition dans sa formulation actuelle. La seconde version ci-dessous est la seule proposition de cet écran.','La etapa de redacción no cambió nada en el resumen que escribiste, así que aquí no hay propuesta en su redacción actual. La segunda versión de abajo es la única propuesta de esta pantalla.','Der Schreibschritt hat an Ihrem Kurzprofil nichts geändert, daher gibt es hier keinen Vorschlag in der bestehenden Fassung. Die zweite Version unten ist der einzige Vorschlag auf diesem Bildschirm.','La fase di scrittura non ha cambiato nulla nella sintesi che hai scritto, quindi qui non c\'è una proposta nella formulazione esistente. La seconda versione qui sotto è l\'unica proposta in questa schermata.','A etapa de escrita não mudou nada no resumo que você escreveu, então não há proposta aqui na redação atual. A segunda versão abaixo é a única proposta desta tela.','Faza pisanja nije ništa promijenila u sažetku koji ste napisali, pa ovdje nema prijedloga u postojećoj formulaciji. Druga verzija ispod jedini je prijedlog na ovom zaslonu.','Этап написания ничего не изменил в вашем резюме, поэтому предложения в нынешней формулировке здесь нет. Второй вариант ниже — единственное предложение на этом экране.','執筆の段階では、あなたが書いた要約に変更はありませんでした。したがって、現在の文面での提案はありません。下の二つ目の版が、この画面で唯一の提案です。','लेखन चरण ने आपके लिखे सारांश में कुछ नहीं बदला, इसलिए यहाँ मौजूदा शब्दांकन में कोई प्रस्ताव नहीं है। नीचे दूसरा रूप ही इस स्क्रीन का एकमात्र प्रस्ताव है।'],
+'ערכת את התקציר ביד. מעבר לגרסה אחרת ימחק את מה שהקלדת ויחזיר את הנוסח המקורי שלה.\n\nלהמשיך?':['حرّرت الملخّص يدويًا. الانتقال إلى نسخة أخرى سيمحو ما كتبته ويعيد صياغتها الأصلية.\n\nهل تتابع؟','You edited the summary by hand. Switching to another version will erase what you typed and bring back its original wording.\n\nContinue?','Vous avez modifié le résumé à la main. Passer à une autre version effacera ce que vous avez saisi et rétablira sa formulation d\'origine.\n\nContinuer ?','Editaste el resumen a mano. Cambiar a otra versión borrará lo que escribiste y restaurará su redacción original.\n\n¿Continuar?','Sie haben das Kurzprofil von Hand bearbeitet. Ein Wechsel zu einer anderen Version löscht Ihre Eingabe und stellt deren ursprüngliche Formulierung wieder her.\n\nFortfahren?','Hai modificato la sintesi a mano. Passare a un\'altra versione cancellerà ciò che hai scritto e ripristinerà la sua formulazione originale.\n\nContinuare?','Você editou o resumo à mão. Trocar para outra versão apagará o que você digitou e trará de volta a redação original dela.\n\nContinuar?','Sažetak ste uredili ručno. Prelazak na drugu verziju izbrisat će ono što ste upisali i vratiti njezinu izvornu formulaciju.\n\nNastaviti?','Вы изменили резюме вручную. Переход к другому варианту сотрёт набранный текст и вернёт его исходную формулировку.\n\nПродолжить?','要約を手で編集しました。別の版に切り替えると、入力した内容は消え、その版の元の文面に戻ります。\n\n続けますか？','आपने सारांश हाथ से संपादित किया है। दूसरे रूप पर जाने से आपका टाइप किया हुआ मिट जाएगा और उसका मूल शब्दांकन लौट आएगा।\n\nजारी रखें?'],
 /* v39.4, the second reading panel. */
 'היה':['كان','was','était','era','war','era','era','bilo','было','以前','पहले'],
 'לפני התשובות:':['قبل الإجابات:','Before the answers:','Avant les réponses :','Antes de las respuestas:','Vor den Antworten:','Prima delle risposte:','Antes das respostas:','Prije odgovora:','До ответов:','回答前：','उत्तरों से पहले:'],
