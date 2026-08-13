@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.17';
+var TT_VERSION = 'v39.18';
 
 var APP = {
   apiKey: '',
@@ -13066,16 +13066,59 @@ var TT_FLAT_EN = [
   'conducted testing', 'conducted analysis', 'was responsible for', 'responsible for',
   'helped with', 'assisted with', 'was involved in', 'took part in'
 ];
-var TT_INFLATED_HE = [
-  '\u05de\u05d4\u05dc\u05da \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9 \u05d7\u05d5\u05e6\u05d4 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9', '\u05d1\u05e2\u05dc \u05d9\u05db\u05d5\u05dc\u05d5\u05ea \u05de\u05d5\u05db\u05d7\u05d5\u05ea',
-  '\u05d0\u05d5\u05e8\u05d9\u05d9\u05e0\u05d8\u05e6\u05d9\u05d4 \u05ea\u05d5\u05e6\u05d0\u05ea\u05d9\u05ea', '\u05d4\u05d5\u05d1\u05dc\u05ea\u05d9 \u05de\u05d4\u05e4\u05da', '\u05e8\u05ea\u05de\u05ea\u05d9 \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9',
-  '\u05e9\u05d7\u05e7\u05df \u05de\u05e8\u05db\u05d6\u05d9', '\u05d7\u05e9\u05d9\u05d1\u05d4 \u05de\u05e2\u05e8\u05db\u05ea\u05d9\u05ea \u05e4\u05d5\u05e8\u05e6\u05ea \u05d3\u05e8\u05da'
-];
-var TT_INFLATED_EN = [
-  'spearheaded', 'championed', 'orchestrated', 'pioneered', 'leveraged', 'synergized',
-  'game changer', 'game-changer', 'transformational change', 'best in class', 'best-in-class',
-  'proven track record of excellence', 'results oriented', 'results-oriented', 'thought leader'
-];
+/* v39.18. THE INFLATED LIST GOES IN ALL TWELVE. THE FLAT LIST DOES NOT.
+
+   When this was built I treated the two lists as carrying the same risk. They
+   do not, and the difference decides which of them can cross a language I
+   cannot read.
+
+   THE INFLATED PHRASES ARE SAFE TO PORT. "spearheaded a transformational
+   change", "\u05d1\u05e2\u05dc \u05d9\u05db\u05d5\u05dc\u05d5\u05ea \u05de\u05d5\u05db\u05d7\u05d5\u05ea", "\u043e\u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0438\u043b \u043f\u0440\u043e\u0440\u044b\u0432\u043d\u044b\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f" - these are marketing
+   set pieces. They are long, distinctive, and they do not turn up by accident
+   inside a factual sentence about what somebody did on a Tuesday. If one
+   appears, flagging it is right. And this is the list that matters most for
+   what the candidate actually asked for, because the signature of machine
+   written text is the inflated register, not the flat one: flat reads as
+   amateur, inflated reads as automated.
+
+   THE FLAT LIST CANNOT BE PORTED, and stays Hebrew and English. Its pattern -
+   an auxiliary verb wrapped around the noun of an action - is real everywhere,
+   but the line between it and correct writing moves with the language. German
+   builds "Durchf\u00fchrung von Tests" as ordinary, correct prose; in French and
+   Russian the boundary is fine enough that I would be guessing. And the cost of
+   a wrong flag is not one line: the repair pass replaces a whole section's
+   changes with the reply it gets back, so one false positive re-runs the
+   section. That asymmetry is the whole argument. */
+var TT_INFLATED = {
+  he: ['מהלך אסטרטגי חוצה ארגוני', 'מהלך אסטרטגי חוצה ארגון', 'בעל יכולות מוכחות', 'בעלת יכולות מוכחות', 'אוריינטציה תוצאתית', 'הובלתי מהפך', 'הובלתי מהפכה', 'רתמתי שינוי ארגוני', 'שחקן מרכזי', 'שחקן משמעותי', 'חשיבה מערכתית פורצת דרך', 'פורץ דרך', 'ערך מוסף משמעותי', 'מצוינות מוכחת', 'הובלה אסטרטגית רוחבית'],
+  en: ['spearheaded', 'championed', 'orchestrated', 'pioneered', 'leveraged', 'synergized', 'synergised', 'game changer', 'game-changer', 'transformational change', 'best in class', 'best-in-class', 'proven track record of excellence', 'results oriented', 'results-oriented', 'thought leader', 'drove transformation', 'paradigm shift', 'value add proposition', 'world class results'],
+  ar: ['قاد تحولا استراتيجيا', 'قيادة تحول جذري', 'صاحب قدرات مثبتة', 'توجه نحو النتائج', 'لاعب رئيسي', 'سجل حافل بالتميز', 'تفكير خارج الصندوق', 'نقلة نوعية', 'ريادة التغيير'],
+  fr: ['a spearhead', 'piloté une transformation stratégique', 'orchestré une transformation', 'levier stratégique majeur', 'capacités avérées', 'orienté résultats', 'orientée résultats', 'acteur clé du changement', 'changement de paradigme', 'excellence reconnue', 'vision disruptive'],
+  es: ['lideré una transformación estratégica', 'orquesté', 'impulsé un cambio transformacional', 'capacidades demostradas', 'orientado a resultados', 'orientada a resultados', 'actor clave del cambio', 'cambio de paradigma', 'excelencia probada', 'visión disruptiva'],
+  de: ['strategische transformation vorangetrieben', 'bahnbrechend', 'nachweisliche fähigkeiten', 'ergebnisorientiert', 'schlüsselakteur', 'paradigmenwechsel', 'exzellenz nachgewiesen', 'ganzheitlich transformiert', 'disruptive vision'],
+  it: ['guidato una trasformazione strategica', 'orchestrato', 'comprovate capacità', 'orientato ai risultati', 'orientata ai risultati', 'attore chiave del cambiamento', 'cambio di paradigma', 'eccellenza comprovata', 'visione dirompente'],
+  pt: ['liderei uma transformação estratégica', 'orquestrei', 'capacidades comprovadas', 'orientado a resultados', 'orientada a resultados', 'ator chave da mudança', 'mudança de paradigma', 'excelência comprovada', 'visão disruptiva'],
+  hr: ['predvodio stratešku transformaciju', 'orkestrirao', 'dokazane sposobnosti', 'usmjeren na rezultate', 'ključni igrač promjene', 'promjena paradigme', 'dokazana izvrsnost', 'disruptivna vizija'],
+  ru: ['возглавил стратегическую трансформацию', 'осуществил прорывные изменения', 'доказанные компетенции', 'ориентирован на результат', 'ключевой игрок', 'смена парадигмы', 'доказанное превосходство', 'прорывное мышление'],
+  ja: ['戦略的変革を主導', '抜本的な変革を牽引', '卓越した実績を有する', '結果志向', 'パラダイムシフト', '業界をリードする', '変革の立役者'],
+  hi: ['रणनीतिक परिवर्तन का नेतृत्व', 'क्रांतिकारी बदलाव', 'सिद्ध क्षमताओं वाले', 'परिणाम-उन्मुख', 'परिणाम उन्मुख', 'परिवर्तन का प्रमुख वाहक', 'आदर्श बदलाव', 'सिद्ध उत्कृष्टता']
+};
+
+function ttInflatedHits(text) {
+  var t = String(text || '');
+  var low = t.toLowerCase();
+  var hits = [];
+  Object.keys(TT_INFLATED).forEach(function (lg) {
+    TT_INFLATED[lg].forEach(function (phrase) {
+      /* Latin scripts are matched lowercased; Hebrew, Arabic, Cyrillic, kana
+         and Devanagari have no case to fold, and lowercasing them is a no op. */
+      if (low.indexOf(String(phrase).toLowerCase()) !== -1 && hits.indexOf(phrase) === -1) {
+        hits.push(phrase);
+      }
+    });
+  });
+  return hits;
+}
 
 function ttPhrasingVerdict(text, lang) {
   var t = String(text || '');
@@ -13084,14 +13127,14 @@ function ttPhrasingVerdict(text, lang) {
   var isEn = /[A-Za-z]/.test(t);
   var low = t.toLowerCase();
   var flat = [], inflated = [];
-  if (isHe) {
-    TT_FLAT_HE.forEach(function (x) { if (t.indexOf(x) !== -1) flat.push(x); });
-    TT_INFLATED_HE.forEach(function (x) { if (t.indexOf(x) !== -1) inflated.push(x); });
-  }
-  if (isEn) {
-    TT_FLAT_EN.forEach(function (x) { if (low.indexOf(x) !== -1) flat.push(x); });
-    TT_INFLATED_EN.forEach(function (x) { if (low.indexOf(x) !== -1) inflated.push(x); });
-  }
+  /* Flat: Hebrew and English only, for the reason set out above. */
+  if (isHe) TT_FLAT_HE.forEach(function (x) { if (t.indexOf(x) !== -1) flat.push(x); });
+  if (isEn) TT_FLAT_EN.forEach(function (x) { if (low.indexOf(x) !== -1) flat.push(x); });
+  /* Inflated: every language, every line, no script test. A French set piece
+     cannot appear inside a Hebrew sentence, so scanning all twelve costs
+     nothing and removes the need to guess which language a mixed line is in -
+     which is a guess this file gets wrong often enough to matter. */
+  inflated = ttInflatedHits(t);
   if (!flat.length && !inflated.length) return null;
   return { flat: flat, inflated: inflated };
 }
