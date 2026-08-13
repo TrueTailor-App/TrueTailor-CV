@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.13';
+var TT_VERSION = 'v39.14';
 
 var APP = {
   apiKey: '',
@@ -10523,10 +10523,113 @@ function gapQuestionCeiling(queue) {
   return Math.max(1, Math.min(TT_MAX_GAP_QUESTIONS, Math.max(questionBudget(queue), sig)));
 }
 
-/* What is still open and still worth asking about. The conversation may not end
-   of its own accord while this is non empty. */
+/* What is still worth ASKING about. The conversation may not end of its own
+   accord while this is non empty. Note what it is not: it is not the list of
+   gaps that are still open in the finished document. Those are two different
+   questions and conflating them is the bug fixed below. */
 function openSignificantGaps() {
   return significantQueueItems((APP && APP.queue) || []);
+}
+
+/* =========================================================================
+   THREE STATES, NOT TWO                                             v39.13
+
+   v39.11 made the queue shrink as the conversation covered it, and got the
+   condition wrong: any answer that was not a skip removed the gap. So "no, I
+   have never worked with that" counted as coverage, and the panel reported zero
+   open gaps over a conversation in which two requirements had been answered in
+   the negative. The score itself was never fooled - the second reading is taken
+   from the finished document, and a negative answer produces no line - but the
+   screen said one thing and the number said another, which is the worst of the
+   two failures because it is the one the candidate believes.
+
+   A requirement that has been put to the candidate ends in one of three states:
+
+     ANSWERED   they told us something, and a line can be built from it.
+     DECLINED   they told us they do not have it. Nothing to build, nothing to
+                ask again, and nothing anyone can do about it. It is not an open
+                gap - it is a closed question with a negative answer.
+     OPEN       never asked, or skipped. This is the only one that is still
+                actionable, and the only one the notice should push on.
+
+   Asking twice is the thing all three have in common: none of them goes back on
+   the queue. Reporting is where they part company.
+   ========================================================================= */
+
+/* Deliberately conservative. A wrong DECLINED hides a real gap from the person
+   who could still close it, so anything that is not plainly a refusal is
+   treated as an answer. Short and negative, or negative and nothing else. */
+var TT_DECLINE_RE = new RegExp(
+  '^(?:' +
+  '\u05dc\u05d0|\u05dc\u05d0 |\u05d0\u05d9\u05df|\u05dc\u05d0 \u05e2\u05d1\u05d3\u05ea\u05d9|\u05dc\u05d0 \u05e2\u05e1\u05e7\u05ea\u05d9|\u05dc\u05d0 \u05d4\u05d9\u05d4 \u05dc\u05d9|\u05dc\u05d0 \u05de\u05db\u05d9\u05e8|\u05dc\u05d0 \u05e0\u05d9\u05e1\u05d9\u05ea\u05d9|\u05de\u05e2\u05d5\u05dc\u05dd \u05dc\u05d0|\u05d0\u05d9\u05df \u05dc\u05d9|\u05d0\u05d9\u05df \u05e0\u05d9\u05e1\u05d9\u05d5\u05df' +
+  '|no|nope|none|never|i have not|i haven\'t|i did not|i didn\'t|not at all|no experience|i do not have|i don\'t have' +
+  '|\u0644\u0627|\u0644\u0645 \u0623\u0639\u0645\u0644|\u0644\u064a\u0633 \u0644\u062f\u064a' +
+  '|non|aucun|jamais|nein|nie|keine|nunca|ninguno|nessuno|mai|\u043d\u0435\u0442|\u043d\u0438\u043a\u043e\u0433\u0434\u0430|\u3044\u3044\u3048|\u306a\u3044|\u0928\u0939\u0940\u0902' +
+  /* NOT \b. The boundary class in JavaScript is ASCII, so a Hebrew or Arabic
+     word is not followed by one and every non Latin branch above would never
+     have fired. Whitespace, punctuation or end of string is what is meant. */
+  ')(?:[\\s.,;:!?\\u05be\u060c]|$)', 'i');
+
+function ttIsDecline(text) {
+  var t = String(text || '').trim();
+  if (!t) return false;
+  /* A long answer is an answer. Someone who writes three lines about what they
+     did instead is describing adjacent experience, not refusing, and rule E in
+     the writing stage exists precisely to place that. */
+  if (t.length > 45) return false;
+  if (/[0-9]/.test(t)) return false;              // a number is information
+  /* "no, but I did run the same thing in another system" is not a refusal, it
+     is exactly the adjacent experience the writing stage is told to place. One
+     contrast word is enough to disqualify the whole match. */
+  if (/(\u05d0\u05d1\u05dc|\u05d0\u05da|\u05d0\u05dd \u05db\u05d9|\u05dc\u05e2\u05d5\u05de\u05ea \u05d6\u05d0\u05ea|\u05d1\u05e2\u05e7\u05d9\u05e4\u05d9\u05df|\u05de\u05e7\u05d1\u05d9\u05dc|but|however|though|although|\u0644\u0643\u0646|mais|aber|pero|ma |\u043d\u043e )/i.test(t)) return false;
+  return TT_DECLINE_RE.test(t);
+}
+
+/* Where each requirement ended up. Written as the conversation goes, read by
+   the notice and by the panel. */
+function ttGapState(reqId) {
+  return (APP.gapState && APP.gapState[String(reqId)]) || '';
+}
+
+function ttSetGapState(reqId, state) {
+  if (!reqId) return;
+  if (!APP.gapState) APP.gapState = {};
+  APP.gapState[String(reqId)] = state;
+}
+
+/* The two lists the notice actually needs, and they are not the same list.
+   OPEN is what somebody can still act on. DECLINED is what they have already
+   settled and should be told about once, without being nagged. */
+function ttGapsByState() {
+  var open = [], declined = [];
+  var seen = {};
+  var all = significantQueueItems(buildQueueSnapshot());
+  all.forEach(function (q) {
+    var id = String(q.req_id || '');
+    var key = id + '|' + q.requirement;
+    if (seen[key]) return;
+    seen[key] = 1;
+    var st = ttGapState(id);
+    if (st === 'answered') return;
+    if (st === 'declined') { declined.push(q); return; }
+    open.push(q);
+  });
+  return { open: open, declined: declined };
+}
+
+/* The queue as it was before the conversation ate it, so the report can name a
+   requirement that was answered in the negative. Rebuilt from memory, which
+   costs nothing: buildQueue is a pure function of the analysis. */
+function buildQueueSnapshot() {
+  /* Deliberately not rebuilt on demand. buildQueue reads the coverage table
+     and the analysis, and calling it from a renderer would make what the
+     notice says depend on state that has moved on since the questions were
+     chosen. The list is captured once, where the questions are chosen, and
+     read from there. With nothing captured it degrades to the live queue:
+     that under reports rather than misreports, which is the right direction
+     for a warning to fail in. */
+  if (APP.queueFull && APP.queueFull.length) return APP.queueFull;
+  return (APP.queue || []).slice();
 }
 
 /* The number shown to the candidate, and it now INCLUDES the closing question.
@@ -10877,6 +10980,51 @@ async function askQuestionTurn(userMessage) {
   renderChat();
 }
 
+/* =========================================================================
+   DOES THE ANSWER CONTAIN THE THING THE QUESTION WAS ASKED FOR      v39.13
+
+   Every question here exists because one specific piece of information is
+   missing, and stage 1 already recorded what SHAPE that information has. A
+   scale requirement needs a number. A named tool needs the name, or a refusal.
+   A certification needs a yes or a no.
+
+   None of that was checked. "כמה אנשים היו בצוות?" answered with "צוות גדול"
+   was recorded as covered, the gap came off the queue, and the writing stage
+   received a sentence it could not build a line from - so the requirement stayed
+   unproved and the candidate was never told why. The question had been asked,
+   answered, and wasted.
+
+   Checked locally, with no model call, because the check is a property of the
+   string: does it contain a digit, does it contain the name. And it nudges once
+   rather than blocking: a second press sends whatever is in the box. Some people
+   genuinely do not remember the headcount, and refusing their answer twice would
+   be the app arguing with them about their own career. */
+function ttAnswerShapeGap(text, reqIds) {
+  var t = String(text || '').trim();
+  if (!t) return '';
+  if (ttIsDecline(t)) return '';                 // a refusal is a complete answer
+  var ids = (reqIds || []).filter(Boolean);
+  for (var i = 0; i < ids.length; i++) {
+    var r = reqById(ids[i]);
+    if (!r) continue;
+    if (r.kind === 'scale' || r.kind === 'experience_years') {
+      if (!/[0-9]/.test(t)) return 'number';
+    }
+    if (r.kind === 'certification') {
+      /* A yes with no date is still a yes and is useful. Only an answer that
+         says neither is short of what was asked. */
+      if (!/[0-9]/.test(t) && t.length < 12) return 'cert';
+    }
+  }
+  return '';
+}
+
+function ttShapeHint(kindGap) {
+  if (kindGap === 'number') return H('השאלה הזו מבקשת מספר, וזה בדיוק מה שהופך אותה לשורה בקורות החיים: כמה אנשים, כמה אתרים, כמה שנים, איזה סכום. אם אתה לא זוכר במדויק, הערכה עדיפה על כלום. לחיצה נוספת על שליחה תשלח את מה שכתוב.');
+  if (kindGap === 'cert') return H('השאלה הזו היא כן או לא, ואם כן - גם מתי. תשובה קצרה מדי לא תוכל להפוך לשורה. לחיצה נוספת על שליחה תשלח את מה שכתוב.');
+  return '';
+}
+
 async function submitAnswer(skipped) {
   if (APP.chat.done || !APP.chat.pendingQuestion) return;
   var box = $('chatAnswer');
@@ -10894,6 +11042,22 @@ async function submitAnswer(skipped) {
     }
     if (box && box.focus) box.focus();
     return;
+  }
+  /* v39.13. One nudge, and only one, before the answer is taken as it stands. */
+  if (!skipped) {
+    var shapeGap = ttAnswerShapeGap(text, APP.chat.pendingReqIds && APP.chat.pendingReqIds.length ? APP.chat.pendingReqIds : [APP.chat.pendingReqId]);
+    var nudgeKey = String(APP.chat.pendingReqId || '') + '|' + APP.chat.asked;
+    if (shapeGap && APP.chat.nudged !== nudgeKey) {
+      APP.chat.nudged = nudgeKey;
+      var h2 = $('chatCounter');
+      if (h2) {
+        h2.textContent = ttShapeHint(shapeGap);
+        h2.setAttribute('data-tt-hint', '1');
+        h2.style.color = '#B45309';
+      }
+      if (box && box.focus) box.focus();
+      return;
+    }
   }
   ttClearAnswerHint();
 
@@ -10921,14 +11085,25 @@ async function submitAnswer(skipped) {
      A skipped question does NOT clear its gap. The gap is still open; the
      candidate simply chose not to close it, and saying so at the end is the
      point of the notice below. */
+  /* v39.13. Whatever the answer says, the question is not put twice - so the
+     requirement leaves the ASK queue either way. What it does not do any more is
+     count as coverage on the strength of the candidate having typed something.
+     A refusal is recorded as a refusal, and the notice reports the two apart. */
   if (!skipped) {
-    var closed = {};
+    entry.declined = ttIsDecline(text);
+    var touched = {};
     (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).forEach(function (id) {
-      if (id) closed[String(id)] = 1;
+      if (!id) return;
+      touched[String(id)] = 1;
+      ttSetGapState(id, entry.declined ? 'declined' : 'answered');
     });
-    if (Object.keys(closed).length) {
-      APP.queue = (APP.queue || []).filter(function (q) { return !closed[String(q.req_id || '')]; });
+    if (Object.keys(touched).length) {
+      APP.queue = (APP.queue || []).filter(function (q) { return !touched[String(q.req_id || '')]; });
     }
+  } else {
+    (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).forEach(function (id) {
+      if (id) ttSetGapState(id, 'skipped');
+    });
   }
   APP.chat.max = chatPlannedTotal();
   renderQueue();
@@ -11138,14 +11313,21 @@ function finishChat(note) {
    be acted on; that the match reflects them, so the number is not a mystery;
    and that going back is possible, so it is not a dead end. */
 function openGapNoticeText() {
-  var open = openSignificantGaps();
-  if (!open.length) return null;
-  var skipped = (APP.chat.qa || []).filter(function (x) { return x && x.skipped; }).length;
+  var g = ttGapsByState();
+  if (!g.open.length && !g.declined.length) return null;
   return {
-    open: open,
-    skipped: skipped,
-    head: open.length + H(' פערים נשארו פתוחים ולא נסגרו בשיחה.'),
-    body: H('הפערים האלה נספרים בציון ההתאמה כפי שהם, ומה שלא נאמר עליהם לא ייכנס לקורות החיים - כי האפליקציה לא ממציאה מה שלא נמסר לה. אפשר לחזור לשאלות ולענות עליהם, וההתאמה תימדד מחדש.')
+    open: g.open,
+    declined: g.declined,
+    head: g.open.length
+      ? g.open.length + H(' פערים נשארו פתוחים ולא נסגרו בשיחה.')
+      : H('אין פערים פתוחים שאפשר לסגור בשיחה.'),
+    body: g.open.length
+      ? H('הפערים האלה נספרים בציון ההתאמה כפי שהם, ומה שלא נאמר עליהם לא ייכנס לקורות החיים - כי האפליקציה לא ממציאה מה שלא נמסר לה. אפשר לחזור לשאלות ולענות עליהם, וההתאמה תימדד מחדש.')
+      : '',
+    declinedHead: g.declined.length ? (g.declined.length + H(' דרישות שעניתָ עליהן שאין לך:')) : '',
+    declinedBody: g.declined.length
+      ? H('אלה לא פערים פתוחים ואין מה לעשות בהם - השיחה שאלה, ואתה ענית. הם נספרים בציון ההתאמה כדרישות שלא הוכחו, וזה נכון וישר. אם טעית באחת מהן, אפשר לערוך את התשובה למטה.')
+      : ''
   };
 }
 
@@ -11154,17 +11336,30 @@ function renderOpenGapNotice() {
   if (!el) return;
   var n = APP.chat && APP.chat.done ? openGapNoticeText() : null;
   if (!n) { el.innerHTML = ''; el.classList.add('tt-hidden'); return; }
-  var chips = '';
-  n.open.slice(0, 14).forEach(function (q) {
-    chips += '<span class="inline-block rounded-full px-2 py-0.5 text-xs mb-1 me-1 bg-amber-100 text-amber-900 border border-amber-300">' +
+  function chipsFor(list, cls) {
+    var out = '';
+    list.slice(0, 14).forEach(function (q) {
+      out += '<span class="inline-block rounded-full px-2 py-0.5 text-xs mb-1 me-1 ' + cls + '">' +
              escapeHtml(String(q.requirement || '').slice(0, 40)) + '</span>';
-  });
+    });
+    return out;
+  }
   el.classList.remove('tt-hidden');
   el.innerHTML =
-    '<div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 mt-3">' +
-      '<div class="font-semibold text-sm mb-1">⚠ ' + escapeHtml(n.head) + '</div>' +
-      '<p class="text-xs text-slate-700 mb-2">' + escapeHtml(n.body) + '</p>' +
-      '<div>' + chips + '</div>' +
+    '<div class="rounded-lg border-2 ' + (n.open.length ? 'border-amber-400 bg-amber-50' : 'border-slate-300 bg-slate-50') + ' p-3 mt-3">' +
+      '<div class="font-semibold text-sm mb-1">' + (n.open.length ? '⚠ ' : '') + escapeHtml(n.head) + '</div>' +
+      (n.body ? '<p class="text-xs text-slate-700 mb-2">' + escapeHtml(n.body) + '</p>' : '') +
+      (n.open.length ? '<div>' + chipsFor(n.open, 'bg-amber-100 text-amber-900 border border-amber-300') + '</div>' : '') +
+      /* v39.13. Kept apart on purpose. Mixing a requirement the candidate has
+         already answered "no" to into the list of things they could still fix
+         is asking them to solve something that has no solution. */
+      (n.declined.length
+        ? '<div class="mt-3 pt-2 border-t border-slate-300">' +
+            '<div class="text-xs font-semibold text-slate-700 mb-1">' + escapeHtml(n.declinedHead) + '</div>' +
+            '<p class="text-xs text-slate-600 mb-1">' + escapeHtml(n.declinedBody) + '</p>' +
+            '<div>' + chipsFor(n.declined, 'bg-slate-100 text-slate-600 border border-slate-300') + '</div>' +
+          '</div>'
+        : '') +
     '</div>';
 }
 
@@ -11288,6 +11483,10 @@ function restartQuestions() {
      and reusing it would ask only about whatever was left when the run went
      wrong. Both of these read memory only. */
   APP.queue = buildQueue();
+  /* Kept whole, so the report can still name a requirement the conversation
+     has already taken off the ask queue. */
+  APP.queueFull = APP.queue.slice();
+  APP.gapState = {};
   APP.chat.gapMax = gapQuestionCeiling(APP.queue);
   APP.chat.max = chatPlannedTotal();
 
@@ -13899,6 +14098,10 @@ async function startQuestionsRun() {
   hide('noRelationCard');
   setStage(3);
   APP.queue = buildQueue();
+  /* Kept whole, so the report can still name a requirement the conversation
+     has already taken off the ask queue. */
+  APP.queueFull = APP.queue.slice();
+  APP.gapState = {};
   APP.chat.gapMax = gapQuestionCeiling(APP.queue);
   APP.chat.max = chatPlannedTotal();
   /* v39.4, and a change of rule. The questions used to open in the language of
@@ -16974,6 +17177,7 @@ function resetRun() {
   clearError();
   APP.doc = null; APP.signals = null; APP.coverage = []; APP.gaps = []; APP.queue = [];
   APP.linkMap = {};
+  APP.gapState = {}; APP.queueFull = [];
   /* The two readings of the fit and the sentence written about them belong to
      ONE pairing of one resume with one posting. They were never cleared here,
      so a second run in the same session opened with the previous job's verdict
@@ -19922,6 +20126,11 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'אין פערים פתוחים שאפשר לסגור בשיחה.':['لا توجد فجوات مفتوحة يمكن إغلاقها في المحادثة.','There are no open gaps left that the conversation could close.','Il ne reste aucun écart ouvert que la conversation pourrait combler.','No quedan brechas abiertas que la conversación pudiera cerrar.','Es sind keine offenen Lücken übrig, die das Gespräch schließen könnte.','Non restano lacune aperte che la conversazione possa colmare.','Não restam lacunas abertas que a conversa pudesse fechar.','Nema više otvorenih nedostataka koje bi razgovor mogao zatvoriti.','Не осталось открытых пробелов, которые мог бы закрыть разговор.','対話で埋められる不足は、もう残っていません。','बातचीत से भरे जा सकने वाले कोई खुले अंतर नहीं बचे।'],
+' דרישות שעניתָ עליהן שאין לך:':[' متطلبات أجبت بأنها ليست لديك:',' requirements you answered that you do not have:',' exigences pour lesquelles vous avez répondu que vous ne les avez pas :',' requisitos sobre los que respondiste que no los tienes:',' Anforderungen, zu denen Sie geantwortet haben, dass Sie sie nicht haben:',' requisiti per cui hai risposto di non averli:',' requisitos sobre os quais você respondeu que não tem:',' zahtjeva za koje ste odgovorili da ih nemate:',' требований, о которых вы ответили, что их у вас нет:','件の要件について、持っていないと答えました：','आवश्यकताएँ जिनके बारे में आपने कहा कि वे आपके पास नहीं हैं:'],
+'אלה לא פערים פתוחים ואין מה לעשות בהם - השיחה שאלה, ואתה ענית. הם נספרים בציון ההתאמה כדרישות שלא הוכחו, וזה נכון וישר. אם טעית באחת מהן, אפשר לערוך את התשובה למטה.':['هذه ليست فجوات مفتوحة ولا شيء يُفعل بشأنها — المحادثة سألت، وأنت أجبت. تُحتسب في درجة المطابقة كمتطلبات لم تُثبَت، وهذا صحيح ونزيه. إذا أخطأت في إحداها، يمكنك تعديل الإجابة أدناه.','These are not open gaps and there is nothing to do about them — the conversation asked, and you answered. They are counted in the fit score as unproven requirements, which is correct and honest. If you got one of them wrong, you can edit the answer below.','Ce ne sont pas des écarts ouverts et il n\'y a rien à y faire : la conversation a demandé, vous avez répondu. Ils sont comptés dans le score d\'adéquation comme des exigences non démontrées, ce qui est exact et honnête. Si vous vous êtes trompé sur l\'une d\'elles, vous pouvez modifier la réponse ci-dessous.','Estas no son brechas abiertas y no hay nada que hacer con ellas: la conversación preguntó y tú respondiste. Se cuentan en la puntuación de ajuste como requisitos no demostrados, lo cual es correcto y honesto. Si te equivocaste en alguna, puedes editar la respuesta abajo.','Das sind keine offenen Lücken, und es ist nichts daran zu tun — das Gespräch hat gefragt, und Sie haben geantwortet. Sie zählen im Passungswert als nicht belegte Anforderungen, was richtig und ehrlich ist. Haben Sie sich bei einer geirrt, können Sie die Antwort unten bearbeiten.','Queste non sono lacune aperte e non c\'è nulla da fare al riguardo: la conversazione ha chiesto e tu hai risposto. Sono contate nel punteggio di corrispondenza come requisiti non dimostrati, il che è corretto e onesto. Se hai sbagliato su una di esse, puoi modificare la risposta qui sotto.','Estas não são lacunas abertas e não há nada a fazer sobre elas — a conversa perguntou e você respondeu. São contadas na pontuação de adequação como requisitos não comprovados, o que é correto e honesto. Se você errou em alguma, pode editar a resposta abaixo.','Ovo nisu otvoreni nedostaci i s njima se nema što učiniti — razgovor je pitao, a vi ste odgovorili. Broje se u rezultatu podudarnosti kao nedokazani zahtjevi, što je točno i pošteno. Ako ste se u nečemu prevarili, odgovor možete urediti ispod.','Это не открытые пробелы, и с ними ничего не сделать: разговор спросил, вы ответили. В оценке соответствия они учитываются как недоказанные требования — это верно и честно. Если в чём-то вы ошиблись, ответ можно изменить ниже.','これらは開いた不足ではなく、手の打ちようもありません。対話が尋ね、あなたが答えました。適合スコアでは、証明されていない要件として数えられます。それが正確で誠実な扱いです。どれか答えを誤っていたなら、下で編集できます。','ये खुले अंतर नहीं हैं और इनके बारे में कुछ किया नहीं जा सकता — बातचीत ने पूछा, और आपने उत्तर दिया। ये मिलान अंक में असिद्ध आवश्यकताओं के रूप में गिने जाते हैं, जो सही और ईमानदार है। यदि किसी में आपसे भूल हुई हो, तो नीचे उत्तर संपादित कर सकते हैं।'],
+'השאלה הזו מבקשת מספר, וזה בדיוק מה שהופך אותה לשורה בקורות החיים: כמה אנשים, כמה אתרים, כמה שנים, איזה סכום. אם אתה לא זוכר במדויק, הערכה עדיפה על כלום. לחיצה נוספת על שליחה תשלח את מה שכתוב.':['هذا السؤال يطلب رقمًا، وهذا بالضبط ما يحوّله إلى سطر في السيرة الذاتية: كم شخصًا، كم موقعًا، كم سنة، أي مبلغ. إذا لم تتذكر بدقة، فالتقدير أفضل من لا شيء. ضغطة أخرى على إرسال سترسل ما هو مكتوب.','This question is asking for a number, and the number is exactly what turns it into a line in the resume: how many people, how many sites, how many years, what amount. If you cannot remember exactly, an estimate beats nothing. Pressing send again will send what is written.','Cette question demande un nombre, et c\'est précisément ce qui en fait une ligne du CV : combien de personnes, combien de sites, combien d\'années, quel montant. Si vous ne vous souvenez pas exactement, une estimation vaut mieux que rien. Appuyer de nouveau sur envoyer enverra ce qui est écrit.','Esta pregunta pide un número, y es justo eso lo que la convierte en una línea del currículum: cuántas personas, cuántos centros, cuántos años, qué importe. Si no lo recuerdas con exactitud, una estimación es mejor que nada. Pulsar enviar otra vez enviará lo que está escrito.','Diese Frage verlangt eine Zahl, und genau die macht daraus eine Zeile im Lebenslauf: wie viele Personen, wie viele Standorte, wie viele Jahre, welcher Betrag. Wenn Sie es nicht genau erinnern, ist eine Schätzung besser als nichts. Noch einmal auf Senden drücken schickt das Geschriebene ab.','Questa domanda chiede un numero, ed è proprio il numero a trasformarla in una riga del CV: quante persone, quanti siti, quanti anni, quale importo. Se non ricordi con precisione, una stima è meglio di niente. Premendo di nuovo invia, verrà inviato ciò che è scritto.','Esta pergunta pede um número, e é exatamente isso que a transforma em uma linha do currículo: quantas pessoas, quantos locais, quantos anos, qual valor. Se você não lembra com exatidão, uma estimativa é melhor que nada. Pressionar enviar de novo enviará o que está escrito.','Ovo pitanje traži broj, a upravo ga broj pretvara u redak životopisa: koliko ljudi, koliko lokacija, koliko godina, koji iznos. Ako se ne sjećate točno, procjena je bolja od ničega. Ponovni pritisak na pošalji poslat će ono što je napisano.','Этот вопрос просит число, и именно оно превращает ответ в строку резюме: сколько человек, сколько площадок, сколько лет, какая сумма. Если точно не помните, оценка лучше, чем ничего. Повторное нажатие «отправить» отправит написанное.','この質問は数を求めています。その数こそが、答えを履歴書の一行に変えるものです。何人か、何拠点か、何年か、いくらか。正確に覚えていなければ、概算でも何もないよりましです。もう一度送信を押すと、書かれた内容がそのまま送られます。','यह प्रश्न एक संख्या माँग रहा है, और वही संख्या इसे बायोडाटा की एक पंक्ति में बदलती है: कितने लोग, कितने स्थल, कितने वर्ष, कितनी राशि। यदि ठीक-ठीक याद न हो, तो अनुमान कुछ न होने से बेहतर है। दोबारा भेजें दबाने पर जो लिखा है वही भेजा जाएगा।'],
+'השאלה הזו היא כן או לא, ואם כן - גם מתי. תשובה קצרה מדי לא תוכל להפוך לשורה. לחיצה נוספת על שליחה תשלח את מה שכתוב.':['هذا السؤال نعم أو لا، وإن كان نعم — فمتى أيضًا. إجابة قصيرة جدًا لن تتحول إلى سطر. ضغطة أخرى على إرسال سترسل ما هو مكتوب.','This question is a yes or a no, and if yes, also when. An answer this short cannot become a line. Pressing send again will send what is written.','Cette question appelle un oui ou un non, et si c\'est oui, également quand. Une réponse aussi courte ne peut pas devenir une ligne. Appuyer de nouveau sur envoyer enverra ce qui est écrit.','Esta pregunta es un sí o un no, y si es sí, también cuándo. Una respuesta tan corta no puede convertirse en una línea. Pulsar enviar otra vez enviará lo que está escrito.','Diese Frage ist ein Ja oder ein Nein, und wenn Ja, auch wann. Eine so kurze Antwort kann keine Zeile werden. Noch einmal auf Senden drücken schickt das Geschriebene ab.','Questa domanda è un sì o un no, e se sì, anche quando. Una risposta così breve non può diventare una riga. Premendo di nuovo invia, verrà inviato ciò che è scritto.','Esta pergunta é um sim ou um não, e se for sim, também quando. Uma resposta tão curta não pode virar uma linha. Pressionar enviar de novo enviará o que está escrito.','Ovo je pitanje da ili ne, a ako je da — i kada. Ovako kratak odgovor ne može postati redak. Ponovni pritisak na pošalji poslat će ono što je napisano.','Это вопрос «да» или «нет», а если да — то ещё и когда. Такой короткий ответ не сможет стать строкой. Повторное нажатие «отправить» отправит написанное.','この質問は「はい」か「いいえ」、そして「はい」ならいつか、です。これほど短い答えでは一行になりません。もう一度送信を押すと、書かれた内容がそのまま送られます。','यह प्रश्न हाँ या ना का है, और यदि हाँ — तो कब भी। इतना छोटा उत्तर पंक्ति नहीं बन सकता। दोबारा भेजें दबाने पर जो लिखा है वही भेजा जाएगा।'],
 'מסמך Word':['مستند Word','Word document','Document Word','Documento de Word','Word-Dokument','Documento Word','Documento do Word','Word dokument','Документ Word','Word 文書','Word दस्तावेज़'],
 'קובץ PDF':['ملف PDF','PDF file','Fichier PDF','Archivo PDF','PDF-Datei','File PDF','Arquivo PDF','PDF datoteka','Файл PDF','PDF ファイル','PDF फ़ाइल'],
 'קובץ טקסט':['ملف نصي','Text file','Fichier texte','Archivo de texto','Textdatei','File di testo','Arquivo de texto','Tekstualna datoteka','Текстовый файл','テキストファイル','पाठ फ़ाइल'],
