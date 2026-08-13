@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.16';
+var TT_VERSION = 'v39.17';
 
 var APP = {
   apiKey: '',
@@ -6914,6 +6914,9 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
   /* v39.11. Named, one by one, on a rerun the candidate asked for. The general
      rule E did not place these the first time, and repeating a general rule
      louder is not a plan. */
+  var phrasingBlock = (Array.isArray(APP.phrasingRepair) && APP.phrasingRepair.length)
+    ? ttPhrasingRepairNote(APP.phrasingRepair)
+    : null;
   var forceList = Array.isArray(APP.forcePlace) ? APP.forcePlace : [];
   var forceBlock = forceList.length ? ttPromptJoin([
     'THESE ANSWERS CAME BACK WITH NO PLACE IN THE DOCUMENT AND THE CANDIDATE HAS ASKED AGAIN.',
@@ -6947,6 +6950,7 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '',
     noAnswerBlock,
     forceBlock,
+    phrasingBlock,
     noAnswerBlock ? '' : null,
     domainModeBlock() || null,
     domainModeBlock() ? '' : null,
@@ -6991,7 +6995,7 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '',
     'D6b. ACTION FIRST, ON EVERY LINE YOU RETURN AND NOT ONLY ON THE TOP OF A BLOCK.',
     '    D6 says convert a state into an action where you find one. This says something stronger about the FIRST WORDS: every line you return opens on what the candidate did. The opening words are the only part of a bullet a six second scan is guaranteed to reach, and a bullet that opens on a duty spends them describing the job rather than the person.',
-    '    These openings are rebuilt whenever you return the line, in any language: a responsibility noun (\u05d0\u05d7\u05e8\u05d9\u05d5\u05ea \u05e2\u05dc, \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, \u05d4\u05d9\u05d9\u05ea\u05d9 \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, Responsible for, In charge of), a bare involvement (\u05e2\u05d1\u05d5\u05d3\u05d4 \u05de\u05d5\u05dc, \u05d8\u05d9\u05e4\u05d5\u05dc \u05d1, \u05e2\u05d9\u05e1\u05d5\u05e7 \u05d1, Worked with, Handled, Dealt with, Involved in), or a scene setter that says nothing (\u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, As part of the role).',
+    '    These openings are rebuilt whenever you return the line, in any language: a responsibility noun (\u05d0\u05d7\u05e8\u05d9\u05d5\u05ea \u05e2\u05dc, \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, \u05d4\u05d9\u05d9\u05ea\u05d9 \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, Responsible for, In charge of), a bare involvement NOUN (\u05e2\u05d1\u05d5\u05d3\u05d4 \u05de\u05d5\u05dc, \u05d8\u05d9\u05e4\u05d5\u05dc \u05d1, \u05e2\u05d9\u05e1\u05d5\u05e7 \u05d1, Involvement in, Involved in, Worked with) - note that the INFLECTED VERB is fine and is on the approved list in D11: \u05d8\u05d9\u05e4\u05dc\u05ea\u05d9 and "handled" are ordinary professional verbs, it is \u05d8\u05d9\u05e4\u05d5\u05dc \u05d1 as a noun that says nothing, or a scene setter that says nothing (\u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, As part of the role).',
     '    D7 still outranks this completely and is not softened by one word. If the only honest verb is a supporting one, the line opens on the supporting verb: \u05e1\u05d9\u05d9\u05e2\u05ea\u05d9, \u05dc\u05e7\u05d7\u05ea\u05d9 \u05d7\u05dc\u05e7 \u05d1, supported, contributed to. An honest small verb at the front beats a false large one, and rewriting a participant into a leader is the one failure this app cannot recover from.',
     '    VARY THE VERB. The same verb opening four bullets in a row reads as a template even when every one of them is true, and a template is discounted by the reader exactly like a loud verb is. Reach for the plain word a person would have typed, and reach for a different one each time.',
     '',
@@ -7002,6 +7006,26 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '    WHEN NO IMPACT EXISTS ANYWHERE IN THE FILE, WRITE THE LINE WITHOUT ONE AND WRITE IT AS A COMPLETE LINE.',
     '    Never signal the absence. No hedging, no softening, no \u05d1\u05d9\u05df \u05d4\u05e9\u05d0\u05e8, no \u05dc\u05e8\u05d1\u05d5\u05ea, no "among other things", no "as needed", no trailing qualifier that tells the reader something is missing here. A bullet with a precise action and a precise scope and no number is a strong bullet. A bullet that apologises for having no number is a weak one, and the difference is entirely in the writing.',
     '    Scope is the substitute for a number and the file almost always has it: how many sites, which systems, which regulator, which languages, which departments, in which countries, under which standard. "\u05ea\u05d7\u05d6\u05e7\u05ea\u05d9 \u05d0\u05ea \u05de\u05e2\u05e8\u05db\u05d5\u05ea \u05d4\u05dc\u05d9\u05d1\u05d4 \u05d1\u05e9\u05dc\u05d5\u05e9\u05d4 \u05d0\u05ea\u05e8\u05d9\u05dd" carries no result and is not missing one.',
+    '',
+    'D11. THE REGISTER OF THE FIELD, WHICH IS NOT THE SAME THING AS BIG WORDS.',
+    '    Three failures survive every rule above, and all three read as amateur to somebody who reads resumes for a living. Each of them opens on an active verb and carries no filler, so D6b and D10 pass them untouched.',
+    '',
+    '    (1) THE VERB TRAPPED INSIDE A NOUN. An auxiliary verb plus the noun of the action, where the action already has a verb of its own. \u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05e4\u05ea\u05e8\u05d5\u05df \u05ea\u05e7\u05dc\u05d5\u05ea is \u05e4\u05ea\u05e8\u05ea\u05d9 \u05ea\u05e7\u05dc\u05d5\u05ea. \u05e2\u05e9\u05d9\u05ea\u05d9 \u05d1\u05d3\u05d9\u05e7\u05d4 is \u05d1\u05d3\u05e7\u05ea\u05d9. \u05e0\u05ea\u05ea\u05d9 \u05de\u05e2\u05e0\u05d4 is \u05e2\u05e0\u05d9\u05ea\u05d9 or \u05d8\u05d9\u05e4\u05dc\u05ea\u05d9. "performed troubleshooting" is "troubleshot"; "carried out testing" is "tested"; "provided support" is "supported". The compressed form is shorter, reads as a person rather than a form, and is the single most recognisable mark of a resume written to fill space.',
+    '',
+    '    (2) THE ABSTRACTION WITH NO OBJECT. \u05e9\u05de\u05e8\u05ea\u05d9 \u05e2\u05dc \u05d6\u05de\u05d9\u05e0\u05d5\u05ea \u05de\u05e2\u05e8\u05db\u05ea says nothing: which system, whose, at what scale. It is not fixed by a grander word, it is fixed by the missing noun - "\u05ea\u05d7\u05d6\u05e7\u05ea\u05d9 \u05d0\u05ea \u05de\u05e2\u05e8\u05db\u05d5\u05ea \u05d4\u05dc\u05d9\u05d1\u05d4 \u05d1\u05e9\u05dc\u05d5\u05e9\u05d4 \u05d0\u05ea\u05e8\u05d9\u05dd". Precision is what reads as professional. Size of vocabulary is not.',
+    '',
+    '    (3) THE BACKGROUND CONDITION DRESSED AS AN ACHIEVEMENT. \u05e0\u05d9\u05d4\u05dc\u05ea\u05d9 \u05ea\u05e7\u05e9\u05d5\u05e8\u05ea \u05e9\u05d5\u05d8\u05e4\u05ea \u05d1\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea is not an accomplishment, it is a language, and a language belongs in the languages section. What is worth a bullet is WHO WAS ON THE OTHER SIDE, because that is what the English was for: "\u05e2\u05d1\u05d3\u05ea\u05d9 \u05de\u05d5\u05dc \u05e6\u05d5\u05d5\u05ea\u05d9\u05dd \u05d1\u05d0\u05e8\u05d4"\u05d1 \u05d5\u05d1\u05d4\u05d5\u05d3\u05d5", "\u05e4\u05e2\u05dc\u05ea\u05d9 \u05d1\u05e1\u05d1\u05d9\u05d1\u05d4 \u05d2\u05dc\u05d5\u05d1\u05dc\u05d9\u05ea \u05e8\u05d1"\u05dc\u05d0\u05d5\u05de\u05d9\u05ea". A global working environment implies the language and proves something the language alone does not. IF THE FILE NAMES NO COUNTERPART AND NO GLOBAL SETTING, DROP THE LINE: it was never carrying anything, and the languages section already says it.',
+    '',
+    '    THE RULE FOR CHOOSING THE WORD. Take the word a practitioner in this field would use for exactly this thing, WHEN THE FILE SUPPORTS IT - and never the word one rank above it. \u05e4\u05ea\u05e8\u05ea\u05d9 \u05ea\u05e7\u05dc\u05d5\u05ea and \u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05e0\u05d9\u05ea\u05d5\u05d7 \u05e9\u05d5\u05e8\u05e9 are two different activities; \u05e2\u05d1\u05d3\u05ea\u05d9 \u05de\u05d5\u05dc \u05e1\u05e4\u05e7\u05d9\u05dd and \u05e0\u05d9\u05d4\u05dc\u05ea\u05d9 \u05e9\u05e8\u05e9\u05e8\u05ea \u05d0\u05e1\u05e4\u05e7\u05d4 are two different jobs. UPGRADING THE REGISTER ONE RANK IS AN INVENTION even though no number moved, and it is the invention that is hardest to spot afterwards.',
+    '',
+    '    AND NOT THE OTHER FAILURE. \u05d4\u05d5\u05d1\u05dc\u05ea\u05d9 \u05de\u05d4\u05dc\u05da \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9 \u05d7\u05d5\u05e6\u05d4 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9, \u05d1\u05e2\u05dc \u05d9\u05db\u05d5\u05dc\u05d5\u05ea \u05de\u05d5\u05db\u05d7\u05d5\u05ea, \u05d0\u05d5\u05e8\u05d9\u05d9\u05e0\u05d8\u05e6\u05d9\u05d4 \u05ea\u05d5\u05e6\u05d0\u05ea\u05d9\u05ea, "spearheaded", "leveraged", "orchestrated", "drove transformational change". These do not read as seniority. They read as filler, and in the last two years they read specifically as text a machine produced. A line that would be equally true of anyone in this occupation has told the reader nothing, however impressive its adjectives.',
+    '',
+    '    THE VERBS TO REACH FOR. The ordinary professional ones, the kind that work in any industry and that a person actually says: \u05e0\u05d9\u05d4\u05dc\u05ea\u05d9, \u05d4\u05d5\u05d1\u05dc\u05ea\u05d9, \u05e4\u05d9\u05ea\u05d7\u05ea\u05d9, \u05d1\u05e0\u05d9\u05ea\u05d9, \u05e2\u05d9\u05e6\u05d1\u05ea\u05d9, \u05ea\u05d9\u05d0\u05de\u05ea\u05d9, \u05e1\u05d9\u05e4\u05e7\u05ea\u05d9, \u05e9\u05d9\u05e4\u05e8\u05ea\u05d9, \u05d9\u05d9\u05e2\u05dc\u05ea\u05d9, \u05d4\u05e7\u05de\u05ea\u05d9, \u05d2\u05d9\u05d1\u05e9\u05ea\u05d9, \u05e4\u05ea\u05e8\u05ea\u05d9, \u05d1\u05d3\u05e7\u05ea\u05d9, \u05d4\u05d8\u05de\u05e2\u05ea\u05d9, \u05dc\u05d9\u05d5\u05d5\u05d9\u05ea\u05d9. In English: led, managed, developed, built, designed, coordinated, delivered, improved, handled, oversaw, implemented, resolved, tested, streamlined.',
+    '    IN EVERY OTHER LANGUAGE, USE THAT LANGUAGE\'S OWN ORDINARY PROFESSIONAL VERBS. Do not translate this English list word for word: a translated verb list reads as translated, which is the same failure as the buzzwords, arriving by a different route.',
+    '',
+    '    THE VERBS TO REFUSE, in any language and in any inflection: spearheaded, championed, orchestrated, pioneered, leveraged, synergized, game changer, drove transformational change, and their equivalents - \u05d4\u05d5\u05d1\u05dc\u05ea\u05d9 \u05de\u05d4\u05dc\u05da \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9 \u05d7\u05d5\u05e6\u05d4 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9, \u05d4\u05d5\u05d1\u05dc\u05ea\u05d9 \u05de\u05d4\u05e4\u05da, \u05e8\u05ea\u05de\u05ea\u05d9 \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9. Also refuse the weak fillers: \u05d4\u05d9\u05d9\u05ea\u05d9 \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc \u05db\u05db\u05dc\u05dc, \u05e1\u05d9\u05d9\u05e2\u05ea\u05d9 \u05d1, "responsible for", "helped with", "assisted with", "was involved in".',
+    '',
+    '    THE TEST FOR A FINISHED LINE: would this person say it out loud, in these words, in an interview, without sounding like they were quoting a brochure. If not, it is wrong in one of the two directions - too flat or too inflated - and both cost the same interview.',
     '',
     'D10. WORDS THAT COST AND RETURN NOTHING. Strip them when you rewrite a line, in every language: \u05d1\u05db\u05d3\u05d9, \u05e2\u05dc \u05de\u05e0\u05ea, \u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, \u05d4\u05d9\u05d4 \u05e2\u05dc\u05d9, \u05de\u05d3\u05d5\u05d1\u05e8 \u05d1, in order to, so as to, was tasked with, had the opportunity to. Every one of them is a word the reader pays for and gets nothing back.',
     '    The language stays the professional register of the candidate\'s own field, but it stays readable by a generalist recruiter who does not work in that field. A term the field uses daily stays. A term only one employer would recognise gets the plain words next to it.',
@@ -12402,6 +12426,53 @@ async function runSynthesis() {
       catch (e) { APP.parseFailures.push({ cat: j.cat, code: 'process_failed', reason: (e && e.message) || '' }); }
     });
 
+    /* ---------- one repair pass for phrasing ----------                v39.17
+       D11 is in the brief, and on register a brief is not enough: the phrasings
+       it forbids are the ones a language model reaches for by default, so they
+       come back anyway some of the time. Every line that carries one is sent
+       back once, with the offending phrase named rather than the rule repeated.
+
+       Whole sections, not single lines, because a bullet rewritten out of the
+       context of its block loses the ordering and the displacement decisions
+       that were made around it. The repaired reply REPLACES the section's
+       changes rather than adding to them, so nothing doubles up. One pass only:
+       a second would cost another call for a shrinking return, and the line as
+       it stands is still a line the candidate approves or rejects by hand. */
+    try {
+      var repairJobs = [];
+      settled.forEach(function (res) {
+        if (res.err) return;
+        var flagged = [];
+        APP.changes.forEach(function (c) {
+          if (c.cat !== res.job.cat) return;
+          if (c.kind !== 'line' && c.kind !== 'add') return;
+          var v = ttPhrasingVerdict(c.after, c.lang);
+          if (v) flagged.push({ id: c.lineId || c.id, text: c.after, v: v });
+        });
+        if (flagged.length) repairJobs.push({ job: res.job, flagged: flagged });
+      });
+      if (repairJobs.length) {
+        setStatus(H('שלב 4: מלטש ניסוחים ב־') + repairJobs.length + H(' מקטעים...'), true);
+        var repaired = await Promise.all(repairJobs.map(function (rj) {
+          APP.phrasingRepair = rj.flagged;
+          var pr = rj.job.run();
+          return pr.then(function (raw) { return { rj: rj, raw: raw }; },
+                         function ()    { return { rj: rj, raw: null }; });
+        }));
+        APP.phrasingRepair = null;
+        repaired.forEach(function (r) {
+          var o = r.raw && safeJsonParse(r.raw);
+          if (!o) return;                       // the first version stands
+          APP.changes = APP.changes.filter(function (c) {
+            return !(c.cat === r.rj.job.cat && (c.kind === 'line' || c.kind === 'add'));
+          });
+          try { r.rj.job.take(o); } catch (e) {}
+        });
+      }
+    } catch (ePhr) {
+      APP.phrasingRepair = null;
+    }
+
     /* Two independent things can be missing from a resume and both have to be
        sayable at once. showNotice writes over whatever was in the box, so the
        messages are collected and shown together rather than one silently
@@ -12956,6 +13027,91 @@ function collectRoleDropChanges(cat, obj) {
       status: 'rejected'
     });
   }
+}
+
+/* =========================================================================
+   FLAT AND INFLATED PHRASING, CAUGHT LOCALLY                        v39.17
+
+   D11 tells the model what professional register means. This checks whether it
+   listened, because on register a rule alone is not enough: the failures it
+   describes are exactly the phrasings a language model reaches for by default.
+
+   Two directions, and both cost the same interview:
+
+     FLAT      an auxiliary verb wrapped around the noun of the action -
+               "ביצעתי פתרון תקלות" for "פתרתי תקלות". Shorter is not the point;
+               the compressed form reads as a person and the long one reads as
+               a form somebody filled in.
+     INFLATED  spearheaded, orchestrated, leveraged, הובלתי מהלך אסטרטגי חוצה
+               ארגון. Reads as a brochure, and since about 2024 reads
+               specifically as a machine.
+
+   HEBREW AND ENGLISH ONLY, and that limit is deliberate rather than a shortcut.
+   The pattern is universal but the phrase list is not, and a list I cannot
+   verify would reject correct writing in a language nobody here reads. A
+   detector that throws away good lines is worse than no detector. The other ten
+   languages get D11 in the brief and nothing here, which leaves them exactly
+   where they were rather than worse.
+
+   The verdict is advisory: it asks for the line again, once, naming what was
+   wrong. It never deletes. */
+var TT_FLAT_HE = [
+  '\u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05e4\u05ea\u05e8\u05d5\u05df', '\u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05d1\u05d3\u05d9\u05e7', '\u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05d8\u05d9\u05e4\u05d5\u05dc',
+  '\u05e2\u05e9\u05d9\u05ea\u05d9 \u05d1\u05d3\u05d9\u05e7', '\u05e2\u05e9\u05d9\u05ea\u05d9 \u05d8\u05d9\u05e4\u05d5\u05dc', '\u05e0\u05ea\u05ea\u05d9 \u05de\u05e2\u05e0\u05d4', '\u05e0\u05ea\u05ea\u05d9 \u05e9\u05d9\u05e8\u05d5\u05ea',
+  '\u05e0\u05d9\u05d4\u05dc\u05ea\u05d9 \u05ea\u05e7\u05e9\u05d5\u05e8\u05ea', '\u05d1\u05d9\u05e6\u05e2\u05ea\u05d9 \u05e2\u05d1\u05d5\u05d3', '\u05d4\u05d9\u05d9\u05ea\u05d9 \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc \u05db\u05db\u05dc\u05dc'
+];
+var TT_FLAT_EN = [
+  'performed troubleshooting', 'performed testing', 'performed maintenance', 'performed analysis',
+  'carried out testing', 'carried out maintenance', 'provided support', 'provided assistance',
+  'conducted testing', 'conducted analysis', 'was responsible for', 'responsible for',
+  'helped with', 'assisted with', 'was involved in', 'took part in'
+];
+var TT_INFLATED_HE = [
+  '\u05de\u05d4\u05dc\u05da \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9 \u05d7\u05d5\u05e6\u05d4 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9', '\u05d1\u05e2\u05dc \u05d9\u05db\u05d5\u05dc\u05d5\u05ea \u05de\u05d5\u05db\u05d7\u05d5\u05ea',
+  '\u05d0\u05d5\u05e8\u05d9\u05d9\u05e0\u05d8\u05e6\u05d9\u05d4 \u05ea\u05d5\u05e6\u05d0\u05ea\u05d9\u05ea', '\u05d4\u05d5\u05d1\u05dc\u05ea\u05d9 \u05de\u05d4\u05e4\u05da', '\u05e8\u05ea\u05de\u05ea\u05d9 \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d0\u05e8\u05d2\u05d5\u05e0\u05d9',
+  '\u05e9\u05d7\u05e7\u05df \u05de\u05e8\u05db\u05d6\u05d9', '\u05d7\u05e9\u05d9\u05d1\u05d4 \u05de\u05e2\u05e8\u05db\u05ea\u05d9\u05ea \u05e4\u05d5\u05e8\u05e6\u05ea \u05d3\u05e8\u05da'
+];
+var TT_INFLATED_EN = [
+  'spearheaded', 'championed', 'orchestrated', 'pioneered', 'leveraged', 'synergized',
+  'game changer', 'game-changer', 'transformational change', 'best in class', 'best-in-class',
+  'proven track record of excellence', 'results oriented', 'results-oriented', 'thought leader'
+];
+
+function ttPhrasingVerdict(text, lang) {
+  var t = String(text || '');
+  if (!t.trim()) return null;
+  var isHe = /[\u0590-\u05FF]/.test(t);
+  var isEn = /[A-Za-z]/.test(t);
+  var low = t.toLowerCase();
+  var flat = [], inflated = [];
+  if (isHe) {
+    TT_FLAT_HE.forEach(function (x) { if (t.indexOf(x) !== -1) flat.push(x); });
+    TT_INFLATED_HE.forEach(function (x) { if (t.indexOf(x) !== -1) inflated.push(x); });
+  }
+  if (isEn) {
+    TT_FLAT_EN.forEach(function (x) { if (low.indexOf(x) !== -1) flat.push(x); });
+    TT_INFLATED_EN.forEach(function (x) { if (low.indexOf(x) !== -1) inflated.push(x); });
+  }
+  if (!flat.length && !inflated.length) return null;
+  return { flat: flat, inflated: inflated };
+}
+
+/* The instruction that goes back with a flagged line. It names the phrase
+   rather than restating the rule, because the model has already read the rule
+   and repeating it louder changes nothing. */
+function ttPhrasingRepairNote(list) {
+  var lines = ['THESE PROPOSED LINES WERE RETURNED FOR PHRASING. The facts in them are accepted and must not change; only the wording is wrong. Rewrite each one and return it again.'];
+  list.forEach(function (x) {
+    lines.push('  ' + x.id + ': ' + x.text);
+    if (x.v.flat.length) {
+      lines.push('     FLAT: ' + x.v.flat.join(', ') + '. The verb is trapped inside a noun, or the phrase is a filler that carries no action. Use the verb itself.');
+    }
+    if (x.v.inflated.length) {
+      lines.push('     INFLATED: ' + x.v.inflated.join(', ') + '. This does not read as seniority, it reads as a brochure. Use the ordinary word for what was actually done.');
+    }
+  });
+  lines.push('Same facts, same scope, same claim. Nothing new, nothing larger.');
+  return lines.join('\n');
 }
 
 function collectLineChanges(cat, obj) {
