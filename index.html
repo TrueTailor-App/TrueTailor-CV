@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.15';
+var TT_VERSION = 'v39.16';
 
 var APP = {
   apiKey: '',
@@ -6680,7 +6680,7 @@ function nextChatSubject() {
     open.forEach(function (q) { if (String(q.req_id) === id) items.push(q); });
   });
   if (!ids.length) return null;
-  return { ids: ids, items: items };
+  return { ids: ids, items: items, lines: (head.resume_lines || []).slice(0, 4) };
 }
 
 /* What the model is told about the subject it did not choose. Names the
@@ -6698,6 +6698,27 @@ function chatSubjectInstruction(subject) {
     lines.push('  ' + id + '  [' + (r.kind || 'hard_skill') + (r.must_have ? ', must have' : '') + ']  ' +
       String(r.text || '') + (q && q.status ? '   (currently: ' + q.status + ')' : ''));
   });
+  /* v39.16. What the resume already says on this subject, quoted into the
+     brief. clusterQueue computed this and its own comment explains why it
+     matters - a subject with evidence behind it can be asked about narrowly,
+     one with nothing behind it has to be asked openly - and the field was then
+     never used by anything. A question that shows it read the file gets a
+     concrete answer; one that could have been asked of any candidate in the
+     occupation gets a generic one, and a generic answer builds no line. */
+  var ev = [];
+  (subject.lines || []).forEach(function (lid) {
+    var ln = null;
+    ((APP.doc && APP.doc.lines) || []).forEach(function (l) { if (l.id === lid) ln = l; });
+    if (ln && String(ln.text || '').trim()) ev.push('  ' + ln.id + ': ' + String(ln.text).trim().slice(0, 160));
+  });
+  lines.push('');
+  if (ev.length) {
+    lines.push('WHAT THE RESUME ALREADY SAYS ON THIS SUBJECT. Build the question on top of it, not beside it: name what is there and ask for the part that is missing.');
+    lines = lines.concat(ev);
+    lines.push('A question that ignores these lines is asking the candidate to repeat what they have already written down, and the answer to it is "as I said above".');
+  } else {
+    lines.push('THE RESUME SAYS NOTHING ON THIS SUBJECT, so the question has to be open: ask whether they have done it at all, and if so in what capacity. Do not assume they have.');
+  }
   lines.push('');
   lines.push('Write ONE question that gets all of them answered at once if they belong together, and that gets the first of them answered if they do not.');
   lines.push('ASK FOR THE SHAPE OF THE ANSWER, NOT ONLY FOR THE SUBJECT. A scale asks how many, and says how many of what. A duration asks how long. A tool asks whether they have used it and in what capacity. A question that can be answered "yes" produces an answer nothing can be built from.');
@@ -10698,6 +10719,38 @@ function ttIsDecline(text) {
   return TT_DECLINE_RE.test(t);
 }
 
+/* v39.16. DOES THIS ANSWER ACTUALLY SPEAK TO THIS REQUIREMENT.
+
+   A merged question covers a cluster, and until now any answer to it marked the
+   whole cluster. Ask about the financial sector and regulation in one sentence,
+   get an answer about banking only, and the regulation gap came off the queue
+   unanswered and unwritten - the same shape as the negative answer that used to
+   count as coverage, one level up.
+
+   The rule is deliberately lopsided. THE REQUIREMENT THE QUESTION LED WITH IS
+   ALWAYS CREDITED: it is what the sentence was built around, the candidate was
+   answering it, and demanding they echo its keywords back would fail honest
+   answers. The others in the cluster have to be earned - their own vocabulary,
+   their own tool name - because they were carried along, not asked about.
+   Getting this wrong in one direction leaves a gap open that could have closed;
+   in the other it closes a gap nobody addressed and writes nothing into the
+   document to show for it. The first is recoverable. */
+function ttAnswerTouches(text, reqId) {
+  var r = reqById(reqId);
+  if (!r) return false;
+  var hay = normalizeToken(String(text || ''));
+  if (!hay) return false;
+  var terms = ttReqKeywords(r).slice();
+  if (r.names_tool) terms.push(r.names_tool);
+  String(r.text || '').split(/[\s,\/()\-]+/).forEach(function (wd) {
+    if (wd && wd.length >= 4 && !isStopTerm(wd)) terms.push(wd);
+  });
+  for (var i = 0; i < terms.length; i++) {
+    if (terms[i] && countTerm(hay, terms[i]) > 0) return true;
+  }
+  return false;
+}
+
 /* Where each requirement ended up. Written as the conversation goes, read by
    the notice and by the panel. */
 function ttGapState(reqId) {
@@ -11018,7 +11071,7 @@ async function askQuestionTurn(userMessage) {
   setChatBusy(true);
   showChatRetry(false);
 
-  var obj = null, transportError = '', scriptRetried = false;
+  var obj = null, transportError = '', scriptRetried = false, subjectRetried = false;
   for (var attempt = 0; attempt < 3 && !obj; attempt++) {
     var raw = '';
     try {
@@ -11045,6 +11098,37 @@ async function askQuestionTurn(userMessage) {
        question now goes through the same verdict the rewritten resume lines
        go through, which catches a mixed language question as well as a
        foreign script one. */
+    /* v39.16. INSTRUCTION IS NOT ENFORCEMENT.
+
+       v39.15 told the model which requirement the question is for. It never
+       checked that the question that came back was about it - and after that
+       change the failure is WORSE than before, because the answer is now filed
+       against the chosen requirement with certainty. A question that wandered
+       would credit a gap nobody asked about.
+
+       The same shape as the language guard directly below: check, ask once more
+       naming the failure, and only then give up. Deliberately loose - one term
+       from the requirement anywhere in the sentence is enough - because the
+       cost of a false alarm is a wasted call and the cost of missing is a
+       misfiled answer. */
+    if (APP.chat.pendingSubjectIds && APP.chat.pendingSubjectIds.length && obj.question) {
+      var onSubject = APP.chat.pendingSubjectIds.some(function (id) {
+        return ttAnswerTouches(String(obj.question), id);
+      });
+      if (!onSubject && !subjectRetried) {
+        subjectRetried = true;
+        obj = null;
+        var wanted = APP.chat.pendingSubjectIds.map(function (id) {
+          var rr = reqById(id);
+          return rr ? (id + ' (' + rr.text + ')') : id;
+        }).join(', ');
+        APP.chat.history.push({ role: 'user', parts: [{ text:
+          'That question is not about the requirement it was given. Ask again, about ' + wanted +
+          ' and about nothing else, naming the subject explicitly enough that the answer can only be about it.' }] });
+        continue;
+      }
+    }
+
     var qv = TT_LOCK.questionVerdict(String(obj.question || ''), APP.chat.lang);
     if (!qv.ok && qv.code !== 'empty') {
       if (!scriptRetried) {
@@ -11232,12 +11316,26 @@ async function submitAnswer(skipped) {
      A refusal is recorded as a refusal, and the notice reports the two apart. */
   if (!skipped) {
     entry.declined = ttIsDecline(text);
+    var ids = (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).filter(Boolean);
     var touched = {};
-    (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).forEach(function (id) {
-      if (!id) return;
-      touched[String(id)] = 1;
-      ttSetGapState(id, entry.declined ? 'declined' : 'answered');
+    entry.reqIdsHit = [];
+    entry.reqIdsMissed = [];
+    ids.forEach(function (id, idx) {
+      /* Index 0 is the requirement the question led with, credited without a
+         test. Everything after it was merged in and has to show up in the
+         answer to be counted. */
+      var hit = (idx === 0) || entry.declined || ttAnswerTouches(text, id);
+      if (hit) {
+        touched[String(id)] = 1;
+        entry.reqIdsHit.push(id);
+        ttSetGapState(id, entry.declined ? 'declined' : 'answered');
+      } else {
+        entry.reqIdsMissed.push(id);
+      }
     });
+    /* Only what the answer reached leaves the queue. What it did not reach is
+       still open, still asked about later, and still reported. */
+    entry.reqIds = entry.reqIdsHit.slice();
     if (Object.keys(touched).length) {
       APP.queue = (APP.queue || []).filter(function (q) { return !touched[String(q.req_id || '')]; });
     }
@@ -11245,6 +11343,41 @@ async function submitAnswer(skipped) {
     (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).forEach(function (id) {
       if (id) ttSetGapState(id, 'skipped');
     });
+  }
+  /* v39.16. ONE FOLLOW UP, AND ONLY WHERE IT PAYS.
+
+     The shape nudge fires before the answer is recorded and can be dismissed by
+     pressing send again, which is right - some people genuinely do not remember
+     the headcount. But when the requirement is a must have with real headroom
+     and the answer still has no number in it, that must have is going to sit in
+     the gate holding the whole result down, and one more question is cheaper
+     than the level it costs.
+
+     Once per conversation. A second follow up is an interrogation, and the
+     conversation people abandon halfway closes no gaps at all. */
+  if (!skipped && !entry.declined && !APP.chat.followedUp) {
+    var stillShort = ttAnswerShapeGap(text, entry.reqIdsHit || []);
+    if (stillShort) {
+      var worth = (entry.reqIdsHit || []).some(function (id) {
+        var rq = reqById(id);
+        if (!rq || !rq.must_have) return false;
+        var row = null;
+        (APP.queueFull || []).forEach(function (q) { if (String(q.req_id) === String(id)) row = q; });
+        return !row || (row.headroom === undefined) || row.headroom >= 0.5;
+      });
+      if (worth) {
+        APP.chat.followedUp = true;
+        (entry.reqIdsHit || []).forEach(function (id) {
+          ttSetGapState(id, '');
+          var row = null;
+          (APP.queueFull || []).forEach(function (q) { if (String(q.req_id) === String(id)) row = q; });
+          if (row && !(APP.queue || []).some(function (q) { return String(q.req_id) === String(id); })) {
+            APP.queue.unshift(row);
+          }
+        });
+        APP.chat.gapMax = (APP.chat.gapMax || 1) + 1;
+      }
+    }
   }
   APP.chat.max = chatPlannedTotal();
   renderQueue();
@@ -11516,6 +11649,43 @@ function ttQuestionPayoff(reqIds) {
   } catch (e) { return ''; }
 }
 
+/* v39.16. THE GAPS THAT WERE SKIPPED, OFFERED ONCE MORE.
+
+   Somebody skips the second question because they are in a hurry, then answers
+   four more. That first gap stays open for good, though the budget was never
+   spent and the reason for skipping had nothing to do with the question. One
+   offer at the end costs nothing and closes gaps that fell for no real reason. */
+function ttSkippedGaps() {
+  var out = [];
+  var seen = {};
+  significantQueueItems(buildQueueSnapshot()).forEach(function (q) {
+    var id = String(q.req_id || '');
+    if (!id || seen[id]) return;
+    if (ttGapState(id) !== 'skipped') return;
+    seen[id] = 1;
+    out.push(q);
+  });
+  return out;
+}
+
+async function ttRevisitSkipped() {
+  var back = ttSkippedGaps();
+  if (!back.length) return;
+  back.forEach(function (q) {
+    ttSetGapState(q.req_id, '');
+    if (!(APP.queue || []).some(function (x) { return String(x.req_id) === String(q.req_id); })) {
+      APP.queue.push(q);
+    }
+  });
+  APP.chat.done = false;
+  APP.chat.closingAsked = true;      // it has already been put; do not put it twice
+  APP.chat.gapMax = (APP.chat.gapMax || 1) + back.length;
+  APP.chat.max = chatPlannedTotal();
+  renderOpenGapNotice();
+  renderChat();
+  await askNextQuestion(chatTurnInstruction(APP.chat.lang, false));
+}
+
 function renderOpenGapNotice() {
   var el = $('openGapNotice');
   if (!el) return;
@@ -11529,10 +11699,36 @@ function renderOpenGapNotice() {
     });
     return out;
   }
+  /* v39.16. What the conversation managed to do, said out loud. Every figure
+     in it already exists; nothing was ever assembled into one sentence, so the
+     candidate finished a set of questions with no idea whether answering them
+     had been worth the time. */
+  var closedCount = 0, totalCount = 0;
+  significantQueueItems(buildQueueSnapshot()).forEach(function (q) {
+    totalCount++;
+    if (ttGapState(q.req_id) === 'answered') closedCount++;
+  });
+  /* No score movement is quoted here, and that is on purpose. This panel is
+     drawn the moment the conversation ends, before a single line has been
+     rewritten, so there is no second reading to compare against yet - and the
+     app measures the second reading from the finished document rather than
+     from the fact that questions were answered. Quoting a number here would be
+     the one thing this whole panel exists to prevent. The gap count is real
+     now; the score arrives on its own panel when it has actually been earned. */
+  var summary = totalCount
+    ? '<div class="text-xs text-slate-700 mb-2">' +
+      escapeHtml(closedCount + H(' מתוך ') + totalCount + H(' פערים נסגרו בשיחה.')) + '</div>'
+    : '';
+  var skipped = ttSkippedGaps();
+  var revisit = skipped.length
+    ? '<div class="mt-2"><button id="btnRevisitSkipped" class="tt-btn tt-btn-sm">' +
+      escapeHtml(H('חזור לשאלות שדילגת עליהן') + ' (' + skipped.length + ')') + '</button></div>'
+    : '';
   el.classList.remove('tt-hidden');
   el.innerHTML =
     '<div class="rounded-lg border-2 ' + (n.open.length ? 'border-amber-400 bg-amber-50' : 'border-slate-300 bg-slate-50') + ' p-3 mt-3">' +
       '<div class="font-semibold text-sm mb-1">' + (n.open.length ? '⚠ ' : '') + escapeHtml(n.head) + '</div>' +
+      summary +
       (n.body ? '<p class="text-xs text-slate-700 mb-2">' + escapeHtml(n.body) + '</p>' : '') +
       (n.open.length ? '<div>' + chipsFor(n.open, 'bg-amber-100 text-amber-900 border border-amber-300') + '</div>' : '') +
       /* v39.13. Kept apart on purpose. Mixing a requirement the candidate has
@@ -11545,7 +11741,14 @@ function renderOpenGapNotice() {
             '<div>' + chipsFor(n.declined, 'bg-slate-100 text-slate-600 border border-slate-300') + '</div>' +
           '</div>'
         : '') +
+      revisit +
     '</div>';
+  var rb = $('btnRevisitSkipped');
+  if (rb) rb.addEventListener('click', function () {
+    ttRevisitSkipped().catch(function (e) {
+      showError(H('החזרה לשאלות נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
+    });
+  });
 }
 
 
@@ -20314,6 +20517,9 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+' פערים נסגרו בשיחה.':[' فجوات أُغلقت في المحادثة.',' gaps were closed in the conversation.',' écarts ont été comblés dans la conversation.',' brechas se cerraron en la conversación.',' Lücken wurden im Gespräch geschlossen.',' lacune sono state colmate nella conversazione.',' lacunas foram fechadas na conversa.',' nedostataka zatvoreno je u razgovoru.',' пробелов закрыто в разговоре.','件の不足が対話で埋まりました。',' अंतर बातचीत में भर गए।'],
+'חזור לשאלות שדילגת עליהן':['عد إلى الأسئلة التي تخطّيتها','Go back to the questions you skipped','Revenir aux questions que vous avez passées','Volver a las preguntas que te saltaste','Zurück zu den übersprungenen Fragen','Torna alle domande che hai saltato','Voltar às perguntas que você pulou','Vrati se na pitanja koja ste preskočili','Вернуться к пропущенным вопросам','とばした質問に戻る','छोड़े गए प्रश्नों पर लौटें'],
+'החזרה לשאלות נעצרה בגלל שגיאה: ':['توقفت العودة إلى الأسئلة بسبب خطأ: ','Going back to the questions stopped because of an error: ','Le retour aux questions s\'est arrêté à cause d\'une erreur : ','La vuelta a las preguntas se detuvo por un error: ','Die Rückkehr zu den Fragen wurde durch einen Fehler gestoppt: ','Il ritorno alle domande si è fermato per un errore: ','A volta às perguntas parou por causa de um erro: ','Povratak na pitanja zaustavljen je zbog pogreške: ','Возврат к вопросам остановлен из-за ошибки: ','質問に戻る処理はエラーで停止しました：','प्रश्नों पर लौटना एक त्रुटि के कारण रुक गया: '],
 'תשובה כאן יכולה להעלות את ההתאמה מ':['إجابة هنا قد ترفع المطابقة من ','Answering here could lift the match from ','Répondre ici pourrait faire passer l\'adéquation de ','Responder aquí podría subir la coincidencia de ','Eine Antwort hier könnte die Passung von ','Rispondere qui potrebbe portare la corrispondenza da ','Responder aqui pode elevar a adequação de ','Odgovor ovdje mogao bi podići podudarnost s ','Ответ здесь может поднять соответствие с ','ここに答えると、適合が','यहाँ उत्तर देने से मिलान '],
 ' ל':[' إلى ',' to ',' à ',' a ',' auf ',' a ',' para ',' na ',' до ','から',': से '],
 'תשובה כאן שווה כ־':['إجابة هنا تساوي نحو ','Answering here is worth about ','Répondre ici vaut environ ','Responder aquí vale unos ','Eine Antwort hier ist etwa ','Rispondere qui vale circa ','Responder aqui vale cerca de ','Odgovor ovdje vrijedi otprilike ','Ответ здесь стоит примерно ','ここに答えると、およそ ','यहाँ उत्तर देना लगभग '],
