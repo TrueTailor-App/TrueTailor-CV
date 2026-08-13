@@ -552,7 +552,9 @@
        underlined in the uploaded docx came out flat in the PDF while the same
        line was still underlined on screen and in the Word file. Only a link
        loses its underline here. */
-    #printArea a { text-decoration: none !important; }
+    /* v39.12. Underlined and coloured in print as well: the address has to be
+       visible as an address on paper, where nothing can be clicked. */
+    #printArea a { text-decoration: underline !important; color: #0563C1 !important; }
     #printArea * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .tt-noprint { display: none !important; }
     /* The margin belongs to the PAGE, so every page gets it, exactly as Word
@@ -564,8 +566,36 @@
        279mm tall against A4's 297: eighteen millimetres shorter per page, on
        top of the margin problem, and a PDF that breaks in a different place
        from the Word file built from the same text. */
-    @page { size: A4; margin: 14mm; }
-    #printArea .tt-sheet { padding: 0 !important; width: auto !important; }
+    /* v39.11. THE BROWSER'S HEADER AND FOOTER, AND WHY THE MARGIN MOVED OFF
+       THE PAGE RULE TO DO IT.
+
+       Chrome, Edge and Safari print a header and a footer of their own into
+       every page: the document title at the top, the URL and the date at the
+       bottom. On a resume that means the application's name is printed over the
+       candidate's name and a github.io address is printed under their work
+       history. It is a checkbox in the print dialog and nobody finds it.
+
+       There is no CSS property that switches it off. What the engines do
+       consistently is put that furniture INSIDE the page margin box, so a page
+       margin of zero leaves it nowhere to be drawn and it is dropped.
+
+       Zero margin on its own would print the text into the paper's edge, which
+       is why the fourteen millimetres does not disappear - it moves from the
+       page rule onto the sheet, as padding on every printed page rather than
+       once at the top of the flow. box-decoration-break makes a fragmented
+       element repeat its padding on each fragment, which is precisely the
+       difference that made the old comment above true. The text keeps its
+       margin, nothing is cropped, nothing is scaled down, and the geometry the
+       pagination was computed from is unchanged: 297mm minus 14mm twice is
+       still 269mm of text per page. */
+    @page { size: A4; margin: 0; }
+    #printArea .tt-sheet {
+      width: auto !important;
+      padding: 14mm !important;
+      box-sizing: border-box !important;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+    }
   }
 
   /* =====================================================================
@@ -2251,6 +2281,7 @@
          than after it has asked you again. Filled by renderAnswerReuse(). -->
     <div id="answerReuse" class="mb-3"></div>
     <div id="queueOut" class="mb-2"></div>
+    <div id="openGapNotice" class="tt-hidden"></div>
 
     <div id="chatLog" class="tt-chat space-y-3 mb-3"></div>
 
@@ -2360,6 +2391,17 @@
          the top of the page, which is three screens behind them by this point,
          so the one panel that answers "did any of that help" was rendered into
          a place nobody was looking at. -->
+    <!-- v39.11. The same warning as on the answers card, repeated here.
+         Changing an answer marks the run as standing on old ground, but the bar
+         that said so lived three cards up, on the panel about the answers - and
+         the number it was warning about is drawn on THIS card. A candidate who
+         corrects an answer and then looks at their match percentage was reading
+         a figure computed from the answer they had just replaced, with nothing
+         next to it saying so. -->
+    <div id="answersDirtyBar2" class="tt-hidden flex flex-wrap items-center gap-2 mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2">
+      <span id="answersDirtyText2" class="text-xs text-amber-900">תשובה השתנתה. הגרסה ואחוז ההתאמה שלמטה עדיין בנויים על התשובה הקודמת.</span>
+      <button id="btnRebuildFromAnswers2" class="tt-btn tt-btn-primary tt-btn-sm ms-auto">בנה מחדש מהתשובות</button>
+    </div>
     <div id="fitDelta" class="mb-4"></div>
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
       <h2 class="tt-card-title"><span class="tt-tag">שלב 6</span>בדיקות ותוצאה</h2>
@@ -2514,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.10';
+var TT_VERSION = 'v39.13';
 
 var APP = {
   apiKey: '',
@@ -2591,6 +2633,8 @@ var APP = {
   /* v39.2. An answer was corrected after the version was written, and the
      version has not been rebuilt from it yet. */
   answersDirty: false,
+  /* v39.12. Anchor text to address, read out of the uploaded file. */
+  linkMap: {},
   answerEdit: null,
   template: 'classic',
   /* Which step of the active fit ladder the document is rendered at. Zero is
@@ -4414,6 +4458,18 @@ function metricRuns(runs) {
 /* opts.metrics is 'screen' in the two on screen renderers, which marks and
    tints, and 'plain' in the print sheet the pdf is made from, which only sets
    the weight. Absent everywhere else. */
+/* Plain text with its addresses turned into anchors, for the places that were
+   escaping a whole line in one go. */
+function ttLinkedHtml(text) {
+  var parts = (typeof ttSplitOnLinks === 'function') ? ttSplitOnLinks(text) : [{ text: text, href: '' }];
+  var out = '';
+  parts.forEach(function (p) {
+    var esc = escapeHtml(p.text);
+    out += p.href ? '<a href="' + escapeHtml(p.href) + '">' + esc + '</a>' : esc;
+  });
+  return out;
+}
+
 function runsToHtml(runs, opts) {
   var mode = (opts && opts.metrics) || '';
   var cls = mode === 'screen' ? 'tt-metric-highlight' : '';
@@ -4425,6 +4481,10 @@ function runsToHtml(runs, opts) {
     if (r.underline) t = '<u>' + t + '</u>';
     if (r.italic) t = '<i>' + t + '</i>';
     if (r.bold) t = '<b>' + t + '</b>';
+    /* v39.12. The print sheet becomes the PDF, and a PDF keeps the anchors it
+       was printed from, so this is what makes the address in a printed resume
+       clickable. The visible text is untouched, which is what a parser reads. */
+    if (r.href) t = '<a href="' + escapeHtml(r.href) + '">' + t + '</a>';
     out += t;
   }
   return out;
@@ -6750,6 +6810,20 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
      the file alone, both of which are present. */
   var answered = (qa || []).filter(function (p) { return p && !p.skipped && String(p.a || '').trim(); }).length;
 
+  /* v39.11. Named, one by one, on a rerun the candidate asked for. The general
+     rule E did not place these the first time, and repeating a general rule
+     louder is not a plan. */
+  var forceList = Array.isArray(APP.forcePlace) ? APP.forcePlace : [];
+  var forceBlock = forceList.length ? ttPromptJoin([
+    'THESE ANSWERS CAME BACK WITH NO PLACE IN THE DOCUMENT AND THE CANDIDATE HAS ASKED AGAIN.',
+    'Each one below was typed by a person who was told the question mattered. Read rule E again and place every one of them, or state which of its two exemptions applies and why, in used_answers.'
+  ].concat(forceList.map(function (f) {
+    return '  ' + f.tag + '  question: ' + String(f.q || '') + '\n      answer: ' + String(f.a || '') +
+           (f.reqId ? '\n      raised for requirement: ' + f.reqId : '');
+  })).concat([
+    'If the fact is adjacent rather than identical to what was asked, that is not a reason to leave it out. Write what they actually described, in the plain words of the field, and let the reader judge the distance themselves. Writing it as the thing they were asked about remains forbidden.'
+  ])) : null;
+
   var noAnswerBlock = answered ? null : ttPromptJoin([
     'THE CANDIDATE ANSWERED NO QUESTIONS. READ THIS BEFORE YOU DECIDE THERE IS NOTHING TO DO.',
     'There is no new information to add. That removes ONE of your jobs. It removes none of the others, and returning an empty array here is a failure, not caution.',
@@ -6771,6 +6845,7 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     ANSWER_RULES,
     '',
     noAnswerBlock,
+    forceBlock,
     noAnswerBlock ? '' : null,
     domainModeBlock() || null,
     domainModeBlock() ? '' : null,
@@ -6812,9 +6887,41 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '    "השתתפתי בפרויקט" -> "הובלתי את הפרויקט" is a lie and is forbidden. So is "היה חלק מ" -> "ניהלתי", and "סייעתי ל" -> "אחראי ל".',
     '    Where the only honest action verb would be weaker than the state phrasing implies, keep the line closer to what it said. A true supporting verb beats a false leading one.',
     '',
-    'D8. Do not touch a line for D6 alone. If a line proves nothing this posting asks for and you had no other reason to return it, leave it out of the array. D6 changes HOW you rewrite, not WHICH lines you rewrite.',
-    '    The one exception is rule I2 below: a line you are promoting to the top of its block is a line you already decided proves something, and it is rewritten for its opening verb even if you had no other reason to touch it.',
-    'E. If an answer contains a real fact that does not belong inside any existing line, you may add it as one new bullet, attached to the id of the line it belongs next to.',
+    '',
+    'D6b. ACTION FIRST, ON EVERY LINE YOU RETURN AND NOT ONLY ON THE TOP OF A BLOCK.',
+    '    D6 says convert a state into an action where you find one. This says something stronger about the FIRST WORDS: every line you return opens on what the candidate did. The opening words are the only part of a bullet a six second scan is guaranteed to reach, and a bullet that opens on a duty spends them describing the job rather than the person.',
+    '    These openings are rebuilt whenever you return the line, in any language: a responsibility noun (\u05d0\u05d7\u05e8\u05d9\u05d5\u05ea \u05e2\u05dc, \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, \u05d4\u05d9\u05d9\u05ea\u05d9 \u05d0\u05d7\u05e8\u05d0\u05d9 \u05e2\u05dc, Responsible for, In charge of), a bare involvement (\u05e2\u05d1\u05d5\u05d3\u05d4 \u05de\u05d5\u05dc, \u05d8\u05d9\u05e4\u05d5\u05dc \u05d1, \u05e2\u05d9\u05e1\u05d5\u05e7 \u05d1, Worked with, Handled, Dealt with, Involved in), or a scene setter that says nothing (\u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, As part of the role).',
+    '    D7 still outranks this completely and is not softened by one word. If the only honest verb is a supporting one, the line opens on the supporting verb: \u05e1\u05d9\u05d9\u05e2\u05ea\u05d9, \u05dc\u05e7\u05d7\u05ea\u05d9 \u05d7\u05dc\u05e7 \u05d1, supported, contributed to. An honest small verb at the front beats a false large one, and rewriting a participant into a leader is the one failure this app cannot recover from.',
+    '    VARY THE VERB. The same verb opening four bullets in a row reads as a template even when every one of them is true, and a template is discounted by the reader exactly like a loud verb is. Reach for the plain word a person would have typed, and reach for a different one each time.',
+    '',
+    'D9. THE IMPACT CLAUSE, AND THE RULE FOR WHEN THERE IS NONE.',
+    '    The shape to aim for is: THE ACTION, then WHAT IT WAS ON, then WHAT IT PRODUCED. The third part is what separates a bullet that proves something from a bullet that lists a task.',
+    '    The impact may come from ANYWHERE IN THIS FILE, not only from the line you are rewriting. A figure sitting in the summary, a scope named in the skills section, a result recorded three bullets below, a headcount in a different sentence of the same job: if it belongs to the same role and the same period, it may be joined to the action it plainly resulted from. This is not invention. It is one fact and one action that were always about the same work, written in one line instead of two.',
+    '    Joining a result to an action it did not come from IS invention and is forbidden by rule 4 exactly as writing a new number would be. If the file does not make the connection plain, do not make it.',
+    '    WHEN NO IMPACT EXISTS ANYWHERE IN THE FILE, WRITE THE LINE WITHOUT ONE AND WRITE IT AS A COMPLETE LINE.',
+    '    Never signal the absence. No hedging, no softening, no \u05d1\u05d9\u05df \u05d4\u05e9\u05d0\u05e8, no \u05dc\u05e8\u05d1\u05d5\u05ea, no "among other things", no "as needed", no trailing qualifier that tells the reader something is missing here. A bullet with a precise action and a precise scope and no number is a strong bullet. A bullet that apologises for having no number is a weak one, and the difference is entirely in the writing.',
+    '    Scope is the substitute for a number and the file almost always has it: how many sites, which systems, which regulator, which languages, which departments, in which countries, under which standard. "\u05ea\u05d7\u05d6\u05e7\u05ea\u05d9 \u05d0\u05ea \u05de\u05e2\u05e8\u05db\u05d5\u05ea \u05d4\u05dc\u05d9\u05d1\u05d4 \u05d1\u05e9\u05dc\u05d5\u05e9\u05d4 \u05d0\u05ea\u05e8\u05d9\u05dd" carries no result and is not missing one.',
+    '',
+    'D10. WORDS THAT COST AND RETURN NOTHING. Strip them when you rewrite a line, in every language: \u05d1\u05db\u05d3\u05d9, \u05e2\u05dc \u05de\u05e0\u05ea, \u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, \u05d4\u05d9\u05d4 \u05e2\u05dc\u05d9, \u05de\u05d3\u05d5\u05d1\u05e8 \u05d1, in order to, so as to, was tasked with, had the opportunity to. Every one of them is a word the reader pays for and gets nothing back.',
+    '    The language stays the professional register of the candidate\'s own field, but it stays readable by a generalist recruiter who does not work in that field. A term the field uses daily stays. A term only one employer would recognise gets the plain words next to it.',
+    '',
+    'D8. THE TWO DEPTHS OF REWRITE, AND WHICH LINE GETS WHICH.',
+    '    A line that proves something this posting asks for gets the FULL rewrite: everything in D3 through D9, vocabulary swap included, displacement included, impact clause included.',
+    '    A line that proves nothing this posting asks for gets the PHRASING REWRITE and nothing else. Return it, with exactly two changes and no third:',
+    '      1. rebuild its opening so it starts on the action, under D6b and under D7.',
+    '      2. strip the filler in D10.',
+    '    On that line, do NOT swap in the posting\'s vocabulary, do NOT displace anything under D3b, do NOT add or move an impact clause, do NOT change what it claims, and do NOT reorder its block for it. Its subject matter stays exactly what the candidate wrote. Only the grammar at the front and the dead words in the middle change.',
+    '    The reason both exist: a resume where half the bullets open on an action and the other half open on \u05d0\u05d7\u05e8\u05d0\u05d9\u05d5\u05ea \u05e2\u05dc reads as two documents stapled together, and the passive half drags the active half down with it. But a line this posting has no use for is not worth spending a real rewrite on, and rewriting its content would put a change in front of the candidate that buys them nothing to approve.',
+    '    For these lines the "why" under rule H is short and says what it is: phrasing only, no change to the facts.',
+    '    Rule I2 below is unaffected: a line you are promoting to the top of its block already proves something, so it is on the full path.',
+    'E. AN ANSWER THAT CARRIES A FACT HAS A PLACE IN THIS DOCUMENT. FIND IT.',
+    '    The candidate was asked this question because the resume did not answer it and this posting needs it answered. They stopped and typed a reply. Coming back with "there was nowhere to put it" tells them their time bought nothing, and it is almost never true.',
+    '    Three placements, in this order. Use the first one that fits:',
+    '      1. INSIDE AN EXISTING LINE. The usual case by a wide margin. A headcount joins the line about the team, a system name joins the line about the systems, a duration joins the line about the role. The answer becomes part of a sentence that is already there.',
+    '      2. AS A NEW BULLET, attached to the id of the line it belongs beside. For a fact that is real and relevant and genuinely has no host sentence.',
+    '      3. IN THE SKILLS OR SUMMARY SECTION, when what the answer establishes is a capability rather than an episode.',
+    '    PARALLEL AND ADJACENT EXPERIENCE COUNTS AND IS THE CASE THIS RULE EXISTS FOR. When the candidate answers that they did not do exactly the thing asked but did something of the same kind - another product in the same family, the same work in a different sector, the same responsibility under a different title - that is a real fact and it goes in, described as what it actually was. What you may never do is write it as the thing they were asked about. "PDM" does not become "PLM"; it becomes the document management work they described, in the ordinary words of that field, which is what a reader needs in order to judge it themselves.',
+    '    Only two answers have no placement: one that says the candidate does not have the thing at all, and one that repeats a fact the document already states. For either, return it in used_answers with used false and a note saying which of the two it was, in the candidate\'s language. Any other answer that comes back unplaced is a failure of this rule.',
     'F. A skipped question means the candidate gave you nothing. Do not guess what they would have said.',
     'G. Lines marked "(context, not editable)" are companies, roles and dates. Use them to understand the timeline. Never return them and never restate a date range.',
     'H. For every line you changed, give a one sentence "why" naming the requirement id it now serves. The candidate approves changes one by one and needs to see the reason.',
@@ -6831,7 +6938,7 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '   This is D6 applied where it buys the most, and D7 governs it completely: convert the verb, never promote the person. "אחראי על ניהול צוות של 6" becomes "ניהלתי צוות של 6". "השתתפתי בפרויקט" stays what it was.',
     '   Use the plain verb a person would have typed: ניהלתי, הובלתי, בניתי, הטמעתי, צמצמתי, איתרתי, ייצבתי, led, built, ran, cut, resolved, rebuilt.',
     '   Do NOT reach for the impressive one. spearheaded, orchestrated, leveraged, pioneered, revolutionised and their Hebrew equivalents are stripped out of this app\'s output automatically, and a resume that reads as machine written is rejected by the human before the words ever help. The ordinary verb is the correct verb.',
-    '   At most the top two lines of a block. A section where every bullet opens on a loud verb reads as a template, which costs more than it gains.',
+    '   The LOUD treatment is for at most the top two lines of a block. Every other line still opens on an action under D6b, but with the ordinary verb rather than the strongest one available: a section where every bullet reaches for its biggest verb reads as a template, which costs more than it gains. Opening on an action is the rule; escalating the verb is the exception.',
     'I3. A FIGURE AT THE END OF A LONG SENTENCE IS A FIGURE NOBODY READS. If a line you are already rewriting carries its number, amount, percentage or headcount after roughly the eighth word, move it forward so it lands early in the sentence.',
     '    "במסגרת התפקיד הייתי אחראי על הובלת פרויקט התייעלות שהביא בסופו של דבר לחיסכון של 18% בעלויות ההפצה" becomes "צמצמתי 18% מעלויות ההפצה בהובלת פרויקט התייעלות".',
     '    This is a REORDERING OF CLAUSES INSIDE ONE SENTENCE and nothing more. Same fact, same number, same scope, same claim. Do not round the figure, do not restate it, do not add a second one, and never move a number from one line into another line.',
@@ -9216,7 +9323,8 @@ async function ttReuseApply(keep) {
     var handled = {};
     rows.forEach(function (row) { if (String(row.text || '').trim()) handled[row.reqId] = 1; });
     APP.queue = APP.queue.filter(function (q) { return !handled[q.req_id]; });
-    APP.chat.max = questionBudget(APP.queue);
+    APP.chat.gapMax = gapQuestionCeiling(APP.queue);
+    APP.chat.max = chatPlannedTotal();
   }
   APP.reuse.done = true;
   renderAnswerReuse();
@@ -10386,6 +10494,53 @@ function significantQueueItems(queue) {
    more. None of those numbers is written down anywhere. */
 var TT_WEIGHT_COVERAGE = 0.8;
 
+/* v39.11. THE CONVERSATION STOPS WHEN THE GAPS ARE COVERED, NOT WHEN A COUNTER
+   RUNS OUT.
+
+   questionBudget sizes the conversation in SUBJECTS, on the reasoning that one
+   question covers a cluster of related gaps. That reasoning is sound and it is
+   why a narrow posting gets two questions instead of nine. What was missing is
+   that nothing ever checked whether the question the model actually asked
+   covered the cluster it had been budgeted for.
+
+   Reported, and reproduced: a queue holding a networks gap and a financial
+   sector gap, budgeted at one question because the significant items clustered
+   to one subject. The model was handed the WHOLE queue, spent its single
+   question on the networks gap, and the conversation ended with the financial
+   sector gap never raised - while the panel above it went on promising, in the
+   future tense, that it would be.
+
+   So the budget is demoted from a stop condition to a CEILING, and the stop
+   condition becomes the thing it was always standing in for: is there a
+   significant gap left. A question that covers three gaps still ends the
+   conversation three gaps sooner, which is the whole benefit of clustering,
+   kept. A question that covers one gap now buys one gap, which is what it was
+   always worth. */
+var TT_MAX_GAP_QUESTIONS = 12;
+
+function gapQuestionCeiling(queue) {
+  var sig = significantQueueItems(queue).length;
+  return Math.max(1, Math.min(TT_MAX_GAP_QUESTIONS, Math.max(questionBudget(queue), sig)));
+}
+
+/* What is still open and still worth asking about. The conversation may not end
+   of its own accord while this is non empty. */
+function openSignificantGaps() {
+  return significantQueueItems((APP && APP.queue) || []);
+}
+
+/* The number shown to the candidate, and it now INCLUDES the closing question.
+   That question sat outside the count before, which is why a conversation that
+   announced one question asked two, and the second one arrived after the
+   progress line had already declared the whole thing finished. */
+function chatPlannedTotal() {
+  var asked = (APP.chat && APP.chat.asked) || 0;
+  var ceiling = (APP.chat && APP.chat.gapMax) || 1;
+  var open = clusterQueue(openSignificantGaps(), 18).length;
+  var gapQuestions = Math.max(asked, Math.min(ceiling, asked + open));
+  return Math.max(1, gapQuestions) + 1;
+}
+
 function questionBudget(queue) {
   var significant = significantQueueItems(queue);
   if (!significant.length) return Math.max(1, Math.min(3, (queue || []).length));
@@ -10547,7 +10702,18 @@ function clusterQueue(queue, limit) {
    every turn, so question N genuinely knows everything asked and answered
    before it. */
 function chatContext() {
-  return chatSystemInstruction(surgeonView(APP.doc), APP.signals, APP.coverage, APP.queue.slice(0, APP.chat.max + 4), APP.chat.max);
+  /* v39.11. The queue used to be handed over in raw priority order, which mixed
+     the gaps the budget was computed from with the ones it was not, and left the
+     model free to spend the only question on an item nobody had budgeted for.
+     The significant ones go first now, and everything else follows them. */
+  var sig = significantQueueItems(APP.queue);
+  var sigIds = {};
+  sig.forEach(function (q) { sigIds[q.req_id + '|' + q.requirement] = 1; });
+  var rest = APP.queue.filter(function (q) { return !sigIds[q.req_id + '|' + q.requirement]; });
+  var ordered = sig.concat(rest);
+  return chatSystemInstruction(surgeonView(APP.doc), APP.signals, APP.coverage,
+                               ordered.slice(0, (APP.chat.gapMax || APP.chat.max) + 4),
+                               APP.chat.gapMax || APP.chat.max);
 }
 
 /* Sent back when the model returns something that is not readable JSON. One
@@ -10612,7 +10778,17 @@ async function askNextQuestion(userMessage) {
 }
 
 async function askQuestionTurn(userMessage) {
-  if (APP.chat.asked >= APP.chat.max) { finishChat(H('הגענו למכסת השאלות.')); return; }
+  /* v39.11. Two stop conditions, and the order matters. The ceiling is the
+     safety rail for a pathological posting. Running out of open gaps is the
+     normal, intended end, and it is the one that used to be unreachable
+     because the counter got there first. */
+  if (APP.chat.asked >= (APP.chat.gapMax || APP.chat.max)) {
+    finishChat(openSignificantGaps().length
+      ? H('הגענו לתקרת השאלות ונשארו פערים פתוחים.')
+      : H('הגענו למכסת השאלות.'));
+    return;
+  }
+  if (!openSignificantGaps().length && (APP.chat.qa || []).length) { finishChat(); return; }
 
   APP.chat.history.push({ role: 'user', parts: [{ text: userMessage }] });
   APP.chat.lastTurnMessage = userMessage;      // so the retry button can repeat this turn
@@ -10734,6 +10910,28 @@ async function submitAnswer(skipped) {
   };
   APP.chat.qa.push(entry);
   try { ttBankRemember(entry); } catch (e) {}
+  /* v39.11. THE QUEUE NOW SHRINKS AS THE CONVERSATION COVERS IT.
+
+     It never did. It was filtered once, when answers came out of the bank, and
+     from then on it was a fixed list that the panel kept rendering in the future
+     tense no matter how much of it had been dealt with. Which is why a candidate
+     could answer a question and still be told, underneath their own answer, that
+     the gap it closed "will be examined in the conversation".
+
+     A skipped question does NOT clear its gap. The gap is still open; the
+     candidate simply chose not to close it, and saying so at the end is the
+     point of the notice below. */
+  if (!skipped) {
+    var closed = {};
+    (entry.reqIds && entry.reqIds.length ? entry.reqIds : [entry.reqId]).forEach(function (id) {
+      if (id) closed[String(id)] = 1;
+    });
+    if (Object.keys(closed).length) {
+      APP.queue = (APP.queue || []).filter(function (q) { return !closed[String(q.req_id || '')]; });
+    }
+  }
+  APP.chat.max = chatPlannedTotal();
+  renderQueue();
   APP.chat.pendingQuestion = '';
   APP.chat.pendingReqId = '';
   APP.chat.pendingReqIds = [];
@@ -10857,7 +11055,17 @@ function finishChat(note) {
      list it, the queue did not know it had been asked, and the second fit
      reading counted it as a question that was never put. Recorded as skipped,
      which is what it is, and which is exactly what the skip button records. */
-  if (APP.chat.pendingQuestion && !APP.chat.isClosing) {
+  /* v39.11. The exception for the closing question is gone.
+
+     It read: record the pending question as skipped, unless the pending question
+     is the closing one. Which meant that if anything ended the conversation a
+     second time while the closing question was on screen - the finish button,
+     most obviously - that question was asked, displayed, and then erased from
+     the record. Not answered, not skipped: absent. The writing stage never knew
+     it had been put, and the answers report never listed it. Reproduced from the
+     screenshot of a real run, where the panel read "the conversation is over, 1
+     answers" directly beneath an unanswered question with no box under it. */
+  if (APP.chat.pendingQuestion) {
     APP.chat.turns.push({
       role: 'user',
       text: APP.chat.lang === 'en' ? '(skipped)' : H('(דילגתי)'),
@@ -10866,11 +11074,12 @@ function finishChat(note) {
     APP.chat.qa.push({
       q: APP.chat.pendingQuestion, a: '', skipped: true,
       reqId: APP.chat.pendingReqId, reqIds: (APP.chat.pendingReqIds || []).slice(),
-      closing: false, aForCv: '', aLangFrom: '', translateNote: ''
+      closing: !!APP.chat.isClosing, aForCv: '', aLangFrom: '', translateNote: ''
     });
     APP.chat.pendingQuestion = '';
     APP.chat.pendingReqId = '';
     APP.chat.pendingReqIds = [];
+    APP.chat.isClosing = false;
   }
 
   /* Every path out of the conversation funnels through here: the model saying
@@ -10890,6 +11099,11 @@ function finishChat(note) {
     APP.chat.pendingReqId = '';
     APP.chat.pendingReqIds = [];
     APP.chat.turns.push({ role: 'model', text: q, lang: APP.chat.lang, reqId: '', reqIds: [] });
+    /* v39.11. It is a question, so it is counted like one. The progress line
+       used to announce the end of the conversation and then produce one more
+       question out of nowhere. */
+    APP.chat.asked++;
+    APP.chat.max = chatPlannedTotal();
     setChatBusy(false);
     showChatRetry(false);
     var inRow = $('chatInputRow');
@@ -10906,9 +11120,52 @@ function finishChat(note) {
   var row = $('chatInputRow');
   if (row) row.classList.add('tt-hidden');
   renderChat();
+  renderOpenGapNotice();
   var msg = note || APP.chat.finishNote;
   if (msg) setStatus(msg);
   runSynthesis();
+}
+
+/* ---------- WHAT WAS LEFT UNANSWERED, SAID OUT LOUD ----------
+   The conversation exists to close gaps. Ending it with gaps still open is a
+   legitimate choice - it is the candidate's time - but it is not a neutral one,
+   and until now nothing on the screen said so. The run simply moved on to the
+   writing stage, and the lower match that came out the other end looked like a
+   verdict on the resume rather than a consequence of a question nobody answered.
+
+   Three things have to be in here, and each of them is here because leaving it
+   out would make the notice worse than nothing: WHICH gaps are open, so it can
+   be acted on; that the match reflects them, so the number is not a mystery;
+   and that going back is possible, so it is not a dead end. */
+function openGapNoticeText() {
+  var open = openSignificantGaps();
+  if (!open.length) return null;
+  var skipped = (APP.chat.qa || []).filter(function (x) { return x && x.skipped; }).length;
+  return {
+    open: open,
+    skipped: skipped,
+    head: open.length + H(' פערים נשארו פתוחים ולא נסגרו בשיחה.'),
+    body: H('הפערים האלה נספרים בציון ההתאמה כפי שהם, ומה שלא נאמר עליהם לא ייכנס לקורות החיים - כי האפליקציה לא ממציאה מה שלא נמסר לה. אפשר לחזור לשאלות ולענות עליהם, וההתאמה תימדד מחדש.')
+  };
+}
+
+function renderOpenGapNotice() {
+  var el = $('openGapNotice');
+  if (!el) return;
+  var n = APP.chat && APP.chat.done ? openGapNoticeText() : null;
+  if (!n) { el.innerHTML = ''; el.classList.add('tt-hidden'); return; }
+  var chips = '';
+  n.open.slice(0, 14).forEach(function (q) {
+    chips += '<span class="inline-block rounded-full px-2 py-0.5 text-xs mb-1 me-1 bg-amber-100 text-amber-900 border border-amber-300">' +
+             escapeHtml(String(q.requirement || '').slice(0, 40)) + '</span>';
+  });
+  el.classList.remove('tt-hidden');
+  el.innerHTML =
+    '<div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 mt-3">' +
+      '<div class="font-semibold text-sm mb-1">⚠ ' + escapeHtml(n.head) + '</div>' +
+      '<p class="text-xs text-slate-700 mb-2">' + escapeHtml(n.body) + '</p>' +
+      '<div>' + chips + '</div>' +
+    '</div>';
 }
 
 
@@ -11024,14 +11281,15 @@ function restartQuestions() {
 
   APP.chat = {
     history: [], turns: [], qa: [], lang: APP.chat.lang, langSeq: APP.chat.langSeq || 0,
-    asked: 0, max: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
+    asked: 0, max: 8, gapMax: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
     lastTurnMessage: '', closingAsked: false, isClosing: false, finishNote: '', asking: false
   };
   /* The queue is rebuilt rather than reused: it was filtered as answers came in
      and reusing it would ask only about whatever was left when the run went
      wrong. Both of these read memory only. */
   APP.queue = buildQueue();
-  APP.chat.max = questionBudget(APP.queue);
+  APP.chat.gapMax = gapQuestionCeiling(APP.queue);
+  APP.chat.max = chatPlannedTotal();
 
   /* Everything downstream of the answers is now void, and saying so on screen
      is the whole point: a review list built from deleted answers is worse than
@@ -11188,7 +11446,7 @@ function renderChatProgress(busy) {
       ? H('אפשר להמשיך. התשובות עוברות עכשיו לשלב הכתיבה.')
       : busy
         ? H('מנסח את השאלה הבאה מתוך הפער הבא בתור.')
-        : H('ענית על ') + answered + H(' מתוך ') + total + H('. המספר הוא תקרה: אם הפערים ייסגרו קודם, השיחה תסתיים מוקדם יותר.');
+        : H('ענית על ') + answered + H(' מתוך ') + total + H('. המספר כולל שאלה אחת בסוף שאינה על פער מסוים, ואפשר לדלג עליה. אם הפערים ייסגרו קודם, השיחה תסתיים מוקדם יותר.');
   }
 }
 
@@ -11249,6 +11507,7 @@ function renderChat() {
   var c = $('chatCounter');
   if (c) c.textContent = APP.chat.done ? H('השיחה הסתיימה.') : '';
   renderChatProgress(false);
+  if (typeof renderOpenGapNotice === 'function') renderOpenGapNotice();
   /* v39.2. Every path that changes the conversation ends here, so this is the
      one place the two navigation buttons have to be told about it. */
   if (typeof ttSyncChatNav === 'function') ttSyncChatNav();
@@ -11638,6 +11897,43 @@ function collectAnswerUse(cat, obj) {
   });
 }
 
+/* v39.11. THE ANSWER THAT FOUND NO PLACE, AND WHAT TO DO ABOUT IT.
+
+   The card used to end at "no place was found for this" and stop there, which
+   from where the candidate sits is the app admitting it asked a question for
+   nothing. Reported on a real run: the answer described document management
+   work in a neighbouring system, against a requirement naming PLM. That is
+   exactly the adjacent experience a resume is supposed to carry, and it was
+   dropped on the floor.
+
+   So the dead end becomes a button. It reruns the writing stage with the
+   unplaced answers named, and with an instruction that names them one by one
+   rather than hoping the general rule lands the second time. */
+function ttUnplacedAnswers() {
+  var out = [];
+  (APP.answerUse || []).forEach(function (u) {
+    if (!u || u.skipped) return;
+    var landed = (u.lineIds || []).filter(function (id) {
+      return (APP.changes || []).some(function (c) { return c.lineId === id; });
+    });
+    if (!landed.length && String(u.a || '').trim()) out.push(u);
+  });
+  return out;
+}
+
+async function ttRetryPlaceAnswers() {
+  if (APP.synthesisRunning) return;
+  var unplaced = ttUnplacedAnswers();
+  if (!unplaced.length) return;
+  /* Read by promptSynthesis on this run only, and cleared afterwards whatever
+     happens, so a retry never silently becomes the new normal for the run. */
+  APP.forcePlace = unplaced.map(function (u) {
+    return { tag: u.tag, q: u.q, a: u.aForCv || u.a, reqId: u.reqId || '' };
+  });
+  try { await runSynthesis(); }
+  finally { APP.forcePlace = null; }
+}
+
 function renderAnswerUse() {
   var el = $('answersOut');
   if (!el) return;
@@ -11651,6 +11947,8 @@ function renderAnswerUse() {
 
   var bar = $('answersDirtyBar');
   if (bar) bar.classList.toggle('tt-hidden', !APP.answersDirty);
+  var bar2 = $('answersDirtyBar2');
+  if (bar2) bar2.classList.toggle('tt-hidden', !APP.answersDirty);
 
   var used = 0;
   var html = '<div class="space-y-2">';
@@ -11669,7 +11967,7 @@ function renderAnswerUse() {
         '<span class="text-[10px] rounded px-1.5 py-0.5 bg-slate-200 text-slate-700">' + escapeHtml(u.tag) + '</span>' +
         (r ? '<span class="text-[10px] text-slate-500">' + escapeHtml(r.id + ' · ' + r.text) + '</span>' : '') +
         '<span class="text-[10px] ms-auto ' + (u.skipped ? 'text-slate-500' : ok ? 'text-emerald-700' : 'text-amber-800') + '">' +
-          (u.skipped ? H('דילגת') : ok ? H('✓ נכנס ל־') + landed.length + H(' שורות, הן מופיעות כאן למטה') : H('⚠ לא נמצא לו מקום')) + '</span>' +
+          (u.skipped ? H('דילגת') : ok ? H('✓ נכנס ל־') + landed.length + H(' שורות, הן מופיעות כאן למטה') : H('⚠ עדיין לא נכנס לקורות החיים')) + '</span>' +
       '</div>' +
       '<div class="text-xs text-slate-500" dir="' + qDir + '">' + escapeHtml(u.q) + '</div>' +
       /* v39.2. The answer, or the box it is being corrected in. One row is
@@ -11699,6 +11997,16 @@ function renderAnswerUse() {
         '<div class="text-xs border-s-2 border-emerald-400 ps-2 font-medium" dir="' + dirForText(ch.after, ch.lang) + '">' + escapeHtml(ch.after) + '</div>';
     });
     if (u.notes.length) html += '<div class="text-xs text-amber-900 mt-1">' + escapeHtml(u.notes.join(' ')) + '</div>';
+    /* v39.11. An answered question whose answer never reached the page is the
+       one state on this card that the candidate can still do something about,
+       and it used to be the one state that offered them nothing. */
+    if (!u.skipped && !ok && String(u.a || '').trim()) {
+      html += '<div class="text-xs text-amber-900 mt-1">' +
+        escapeHtml(H('התשובה הזו עדיין לא נכנסה לאף שורה. אם מה שסיפרת הוא ניסיון מקביל ולא בדיוק מה שנשאל, זה עדיין שווה משהו למגייס — אפשר לבקש לנסח אותו ולשלב אותו כפי שהוא, בלי לתאר אותו כמשהו אחר.')) +
+        '</div>' +
+        '<div class="mt-1"><button class="tt-btn tt-btn-sm" data-tt-answer-place="1">' +
+        escapeHtml(H('נסה לשלב את התשובה הזו')) + '</button></div>';
+    }
     html += '</div>';
   });
   html += '</div>';
@@ -11733,6 +12041,14 @@ function renderAnswerUse() {
   var cancels = el.querySelectorAll('[data-tt-answer-cancel]');
   for (var e3 = 0; e3 < cancels.length; e3++) {
     cancels[e3].addEventListener('click', ttAnswerEditCancel);
+  }
+  var places = el.querySelectorAll('[data-tt-answer-place]');
+  for (var e4 = 0; e4 < places.length; e4++) {
+    places[e4].addEventListener('click', function () {
+      ttRetryPlaceAnswers().catch(function (e) {
+        showError(H('השילוב מחדש נעצר בגלל שגיאה: ') + ((e && e.message) || ''));
+      });
+    });
   }
 }
 
@@ -13583,7 +13899,8 @@ async function startQuestionsRun() {
   hide('noRelationCard');
   setStage(3);
   APP.queue = buildQueue();
-  APP.chat.max = questionBudget(APP.queue);
+  APP.chat.gapMax = gapQuestionCeiling(APP.queue);
+  APP.chat.max = chatPlannedTotal();
   /* v39.4, and a change of rule. The questions used to open in the language of
      the RESUME. The posting is the better default: it is the language the
      employer reads, the language every requirement is phrased in, and the one
@@ -13979,7 +14296,7 @@ function reopenDomainChoice() {
   APP.domainMode = '';
   APP.chat = {
     history: [], turns: [], qa: [], lang: APP.chat.lang, langSeq: APP.chat.langSeq || 0,
-    asked: 0, max: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
+    asked: 0, max: 8, gapMax: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
     lastTurnMessage: '', closingAsked: false, isClosing: false, finishNote: ''
   };
   APP.queue = [];
@@ -14030,8 +14347,15 @@ function renderQueue() {
      shorter conversation look like a shallower one. */
   var shown = significantQueueItems(APP.queue).slice(0, 14);
   if (!shown.length) shown = APP.queue.slice(0, 6);
+  /* v39.11. Past tense once there is no more conversation to do the examining.
+     This line is rendered from the LIVE queue, so after the chat has ended every
+     chip in it is by definition a gap that was never covered - and it was still
+     announcing that they "will be examined". */
+  var over = !!(APP.chat && APP.chat.done);
   var html = '<div class="text-xs text-slate-500 mb-1">' + shown.length +
-    H(' פערים ייבדקו בשיחה, בסדר הזה. שאלה אחת יכולה לכסות כמה מהם יחד, ולכן יהיו פחות שאלות מפערים:</div><div>');
+    (over
+      ? H(' פערים לא נבדקו בשיחה ונשארו פתוחים:</div><div>')
+      : H(' פערים ייבדקו בשיחה, בסדר הזה. שאלה אחת יכולה לכסות כמה מהם יחד, ולכן יהיו פחות שאלות מפערים:</div><div>'));
   shown.forEach(function (q) {
     var st = COVER_STYLE[q.status] || QUEUE_STYLE[q.status] || { cls: 'bg-slate-100 text-slate-700', label: q.status };
     html += '<span class="inline-block rounded-full px-2 py-0.5 text-xs mb-1 me-1 ' + st.cls + '" title="' + escapeHtml(st.label) + '">' +
@@ -14042,17 +14366,30 @@ function renderQueue() {
 
 function bindStageUi() {
   $('btnSendAnswer').addEventListener('click', function () { submitAnswer(false); });
-  $('btnSkipQ').addEventListener('click', function () { submitAnswer(true); });
+  $('btnSkipQ').addEventListener('click', function () {
+    /* Skipping is a first class outcome and is never blocked. But when the
+       question being skipped is the last thing standing between the run and a
+       measurement taken over open gaps, it is worth one sentence. Asked once per
+       conversation, because a warning on every skip is a warning nobody reads. */
+    var open = openSignificantGaps();
+    if (!APP.chat.isClosing && open.length && !APP.chat.skipWarned) {
+      APP.chat.skipWarned = true;
+      if (!confirm(H('דילוג משאיר את הפער הזה פתוח, והוא ייספר ככה בציון ההתאמה. מה שלא תספר עליו לא ייכנס לקורות החיים.\n\nלדלג?'))) return;
+    }
+    submitAnswer(true);
+  });
   var backQ = $('btnBackQ');
   if (backQ) backQ.addEventListener('click', stepBackOneQuestion);
   var restartQ = $('btnRestartQ');
   if (restartQ) restartQ.addEventListener('click', restartQuestions);
   var restartA = $('btnRestartFromAnswers');
   if (restartA) restartA.addEventListener('click', restartQuestions);
-  var rebuildA = $('btnRebuildFromAnswers');
-  if (rebuildA) rebuildA.addEventListener('click', function () {
-    rebuildFromAnswers().catch(function (e) {
-      showError(H('הבנייה מחדש נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
+  ['btnRebuildFromAnswers', 'btnRebuildFromAnswers2'].forEach(function (id) {
+    var b = $(id);
+    if (b) b.addEventListener('click', function () {
+      rebuildFromAnswers().catch(function (e) {
+        showError(H('הבנייה מחדש נעצרה בגלל שגיאה: ') + ((e && e.message) || ''));
+      });
     });
   });
   $('btnDoneQ').addEventListener('click', function () {
@@ -14062,6 +14399,16 @@ function bindStageUi() {
     var box = $('chatAnswer');
     var typed = box ? String(box.value || '').trim() : '';
     if (typed && !confirm(H('כתבת תשובה ולא שלחת אותה. אם תמשיך היא תימחק.\n\nלהמשיך בכל זאת?'))) return;
+    /* v39.11. Stopping early is allowed. Stopping early without being told what
+       it costs is not: the match is computed from what the conversation managed
+       to close, and a candidate who walks away from four open gaps should learn
+       that here rather than infer it from a lower number two screens later. */
+    var open = openSignificantGaps();
+    if (open.length && !confirm(
+        H('נשארו ') + open.length + H(' פערים פתוחים שהשיחה לא הספיקה לכסות:\n\n') +
+        open.slice(0, 8).map(function (q) { return '• ' + String(q.requirement || '').slice(0, 60); }).join('\n') +
+        (open.length > 8 ? '\n• ...' : '') +
+        H('\n\nהם ייספרו בציון ההתאמה כפערים פתוחים, ומה שלא סיפרת עליהם לא ייכנס לקורות החיים.\n\nלסיים בכל זאת?'))) return;
     finishChat();
   });
   /* Repeats the turn that failed. The failed exchange is dropped off the end of
@@ -14195,7 +14542,7 @@ function renderFinalStruct() {
       html += '<div class="tt-nm" dir="' + d + '">' + escapeHtml(l.raw.trim()) + '</div>';
       return;
     }
-    if (l.cat === 'header') { html += '<div class="tt-ct" dir="' + d + '">' + escapeHtml(l.raw.trim()) + '</div>'; return; }
+    if (l.cat === 'header') { html += '<div class="tt-ct" dir="' + d + '">' + ttLinkedHtml(l.raw.trim()) + '</div>'; return; }
     if (l.isHeading) { html += '<div class="tt-sec" dir="' + d + '"><span>' + escapeHtml(l.text) + '</span></div>'; return; }
     /* v39.4. The print sheet and the Word writer both refuse to draw a role
        header inside the military service or the languages section, and the two
@@ -14552,6 +14899,169 @@ var TT_MARK_TAGS = {
   U: 'underline', INS: 'underline'
 };
 
+/* =========================================================================
+   LINKS                                                                v39.12
+
+   A contact line is the one part of a resume that is not prose. It is a set of
+   addresses, and half of them are only useful if they can be clicked: a
+   LinkedIn profile, a portfolio, a GitHub account, an email. They were being
+   lost twice over, at opposite ends of the run.
+
+   AT IMPORT. htmlToResumeText reads textContent, so <a href="https://www.
+   linkedin.com/in/somebody">LinkedIn</a> arrived as the bare word "LinkedIn"
+   and the address it pointed at was gone before anything else ran. Nothing
+   downstream could have recovered it.
+
+   AT EXPORT. document.xml.rels was a constant naming one relationship, the
+   stylesheet. A hyperlink in a docx is a run wrapped in <w:hyperlink> that
+   points at a relationship id, so with a fixed rels part no link could be
+   written even where the address had survived as visible text. The print sheet
+   had the matching hole: it escaped every line into plain text, and the only
+   trace of the idea was a print rule styling anchors that were never emitted.
+
+   On the ATS question, which is the reason to be careful here rather than the
+   reason not to do it: a hyperlink in a docx is an ordinary run of text with a
+   relationship attached to it. Parsers read the run. The visible text is what
+   they index either way, and it is unchanged by this - the address stays
+   readable on paper for the reader who prints it, and becomes clickable for the
+   one who does not. What would hurt a parser is a link whose visible text is
+   empty or an image, and neither is produced here.
+   ========================================================================= */
+
+/* Anchor text that carried an address, remembered from the uploaded file so it
+   can be restored on the way out. Keyed by the visible words, because that is
+   all that survives the round trip through plain text. */
+function ttResetLinks() { APP.linkMap = {}; }
+
+function ttLinkKey(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function ttRememberLink(text, href) {
+  var t = ttLinkKey(text);
+  var h = String(href || '').trim();
+  if (!t || !h) return;
+  if (/^javascript:/i.test(h)) return;          // never carried across, whatever the source file says
+  if (!/^(https?:|mailto:|tel:)/i.test(h)) return;
+  if (!APP.linkMap) APP.linkMap = {};
+  if (!APP.linkMap[t]) APP.linkMap[t] = h;
+}
+
+/* A bare address written as text. Three shapes cover essentially every resume:
+   a full URL, a host that starts at www, and an email. Nothing else is turned
+   into a link, because a false positive here writes a wrong address into a
+   document somebody sends to an employer. */
+var TT_URL_NOT = "\\s<>\"'\u0590-\u05FF\u0600-\u06FF\u0400-\u04FF\u3040-\u30FF\u0900-\u097F";
+var TT_URL_RE = new RegExp(
+  '(' +
+  'https?:\\/\\/[^' + TT_URL_NOT + ']+' +                                   // a full address
+  '|www\\.[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+[^' + TT_URL_NOT + ']*' +        // one that starts at www
+  /* The bare host form, which is how almost every resume writes a LinkedIn
+     profile: linkedin.com/in/somebody, with no scheme and no www. A SLASH IS
+     REQUIRED here, and that requirement is the whole safety of this branch: it
+     is what keeps "Node.js" and "Excel 2019" and a sentence ending in a full
+     stop from being turned into addresses in a document somebody sends to an
+     employer. */
+  '|[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+\\/[^' + TT_URL_NOT + ']*' +
+  '|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}' +                        // an email
+  ')', 'g');
+
+function ttHrefFor(token) {
+  var t = String(token || '').replace(/[.,;:)\]]+$/, '');
+  if (/^https?:\/\//i.test(t)) return t;
+  if (/^www\./i.test(t)) return 'https://' + t;
+  if (/^[A-Za-z0-9._%+-]+@/.test(t)) return 'mailto:' + t;
+  /* The bare host form. It only ever reaches here having already satisfied the
+     slash requirement in the pattern, so the scheme is the one thing missing. */
+  if (/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+\//.test(t)) return 'https://' + t;
+  return '';
+}
+
+/* Every link inside one line, as spans over that exact string. Literal
+   addresses first; then the remembered anchor texts, but only where they do not
+   land on top of a span already found, so "LinkedIn: linkedin.com/in/x" gets one
+   link on the address rather than two overlapping ones. */
+function ttLineLinks(text) {
+  var str = String(text || '');
+  if (!str) return [];
+  var spans = [];
+  var m;
+  TT_URL_RE.lastIndex = 0;
+  while ((m = TT_URL_RE.exec(str)) !== null) {
+    var raw = m[0];
+    var trimmed = raw.replace(/[.,;:)\]]+$/, '');
+    var href = ttHrefFor(trimmed);
+    if (href) spans.push({ start: m.index, end: m.index + trimmed.length, href: href });
+  }
+  var map = APP.linkMap || {};
+  Object.keys(map).forEach(function (key) {
+    if (!key) return;
+    var idx = str.toLowerCase().indexOf(key);
+    while (idx !== -1) {
+      var end = idx + key.length;
+      var clash = spans.some(function (sp) { return idx < sp.end && end > sp.start; });
+      if (!clash) spans.push({ start: idx, end: end, href: map[key] });
+      idx = str.toLowerCase().indexOf(key, end);
+    }
+  });
+  spans.sort(function (a, b) { return a.start - b.start; });
+  var out = [];
+  spans.forEach(function (sp) {
+    if (out.length && sp.start < out[out.length - 1].end) return;
+    out.push(sp);
+  });
+  return out;
+}
+
+/* The same string, cut into pieces that are either all link or all not. Used by
+   both writers so the screen, the print sheet and the Word file cannot drift. */
+function ttSplitOnLinks(text) {
+  var str = String(text || '');
+  var links = ttLineLinks(str);
+  if (!links.length) return [{ text: str, href: '' }];
+  var out = [], pos = 0;
+  links.forEach(function (sp) {
+    if (sp.start > pos) out.push({ text: str.slice(pos, sp.start), href: '' });
+    out.push({ text: str.slice(sp.start, sp.end), href: sp.href });
+    pos = sp.end;
+  });
+  if (pos < str.length) out.push({ text: str.slice(pos), href: '' });
+  return out.filter(function (x) { return x.text; });
+}
+
+/* Link spans applied on top of runs that already carry bold, italic and the
+   metric marks, splitting a run wherever a link starts or ends inside it. */
+function ttRunsWithLinks(runs, text) {
+  var links = ttLineLinks(text);
+  if (!links.length) return runs;
+  var out = [], pos = 0;
+  (runs || []).forEach(function (r) {
+    var rt = String(r.text || '');
+    var start = pos, end = pos + rt.length;
+    pos = end;
+    if (!rt) return;
+    var cuts = [start, end];
+    links.forEach(function (sp) {
+      if (sp.start > start && sp.start < end) cuts.push(sp.start);
+      if (sp.end > start && sp.end < end) cuts.push(sp.end);
+    });
+    cuts = cuts.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    for (var i = 0; i < cuts.length - 1; i++) {
+      var a = cuts[i], b = cuts[i + 1];
+      var piece = text.slice(a, b);
+      if (!piece) continue;
+      var hit = null;
+      links.forEach(function (sp) { if (a >= sp.start && b <= sp.end) hit = sp; });
+      var copy = {};
+      Object.keys(r).forEach(function (k) { copy[k] = r[k]; });
+      copy.text = piece;
+      copy.href = hit ? hit.href : '';
+      out.push(copy);
+    }
+  });
+  return out.length ? out : runs;
+}
+
 function domSegments(node) {
   var segs = [];
   (function walk(n, mark) {
@@ -14581,6 +15091,14 @@ function htmlToResumeText(html) {
 
   resetEmphasis();
   APP.emphasis.source = 'docx';
+  /* v39.12. Before the tree is flattened to text. textContent keeps the words
+     and drops the address, so this is the last moment the two are still
+     attached to each other. */
+  ttResetLinks();
+  var anchors = root.querySelectorAll('a[href]');
+  for (var ai = 0; ai < anchors.length; ai++) {
+    ttRememberLink(anchors[ai].textContent, anchors[ai].getAttribute('href'));
+  }
 
   var nodes = root.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6');
   var out = [];
@@ -14884,6 +15402,38 @@ var DOCX_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
   '</Relationships>';
 
+/* v39.12. Built per document rather than declared once, because a hyperlink in
+   a docx is a relationship and a fixed rels part can hold no hyperlinks. rId1
+   stays the stylesheet; every distinct address in the file takes the next id.
+   External targets carry TargetMode="External", without which Word treats the
+   address as a path inside the package and reports the file as damaged. */
+var TT_DOCX_LINKS = null;
+
+function docxLinkId(href) {
+  if (!TT_DOCX_LINKS) return '';
+  var h = String(href || '');
+  if (!h) return '';
+  if (!TT_DOCX_LINKS.byHref[h]) {
+    var id = 'rId' + (TT_DOCX_LINKS.list.length + 2);
+    TT_DOCX_LINKS.byHref[h] = id;
+    TT_DOCX_LINKS.list.push({ id: id, href: h });
+  }
+  return TT_DOCX_LINKS.byHref[h];
+}
+
+function docxRelsXml() {
+  var extra = '';
+  ((TT_DOCX_LINKS && TT_DOCX_LINKS.list) || []).forEach(function (l) {
+    extra += '<Relationship Id="' + l.id +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' +
+      xmlEscape(l.href) + '" TargetMode="External"/>';
+  });
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+    extra + '</Relationships>';
+}
+
 var DOCX_DOC_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
@@ -15063,7 +15613,7 @@ function docxParagraph(text, opts) {
       '<w:rFonts' + docxFontAttrs(opts.fallbackLang || lang, tpl.docxFont) + '/>' +
       (run.bold ? '<w:b/><w:bCs/>' : '') +
       (run.italic ? '<w:i/><w:iCs/>' : '') +
-      (opts.color ? '<w:color w:val="' + opts.color + '"/>' : '') +
+      (run.link ? '<w:color w:val="0563C1"/>' : (opts.color ? '<w:color w:val="' + opts.color + '"/>' : '')) +
       (opts.track ? '<w:spacing w:val="' + opts.track + '"/>' : '') +
       (run.underline ? '<w:u w:val="single"/>' : '') +
       '<w:sz w:val="' + size + '"/><w:szCs w:val="' + size + '"/>' +
@@ -15072,14 +15622,25 @@ function docxParagraph(text, opts) {
   }
 
   var runs = opts.runs && opts.runs.length ? opts.runs : [{ text: text, bold: !!opts.bold }];
+  /* v39.12. Link spans go on last, over whatever bold, italic and metric marks
+     the runs already carry, splitting a run wherever an address begins or ends
+     inside it. Suppressed on headings, where an address cannot appear and a
+     match would be a false positive on a section name. */
+  if (!opts.noLinks) runs = ttRunsWithLinks(runs, text);
   var body = '';
   for (var i = 0; i < runs.length; i++) {
     if (!runs[i].text) continue;
-    body += '<w:r>' + runProps({
+    var isLink = !!runs[i].href;
+    var rel = isLink ? docxLinkId(runs[i].href) : '';
+    var r = '<w:r>' + runProps({
       bold: !!(opts.bold || runs[i].bold),
       italic: !!runs[i].italic,
-      underline: !!runs[i].underline
+      /* Underlined and coloured, because a link that looks like body text is a
+         link nobody clicks - and on paper it still reads as the address it is. */
+      underline: !!runs[i].underline || isLink,
+      link: isLink
     }) + '<w:t xml:space="preserve">' + xmlEscape(runs[i].text) + '</w:t></w:r>';
+    body += (rel ? '<w:hyperlink r:id="' + rel + '">' + r + '</w:hyperlink>' : r);
   }
   return '<w:p>' + pPr + body + '</w:p>';
 }
@@ -15103,6 +15664,9 @@ function lastHeaderLine(doc, i) {
 }
 
 function buildDocxXml(text, tplKey) {
+  /* Reset per build. Two downloads in one session must not share ids, and a
+     rels part left over from the previous document is a file Word refuses. */
+  TT_DOCX_LINKS = { byHref: {}, list: [] };
   var tpl = templateByKey(tplKey || APP.template);
   var doc = parseResume(text);
   var docLang = docDirLang(doc);
@@ -15128,8 +15692,24 @@ function buildDocxXml(text, tplKey) {
     if (!l.raw.trim()) { body += para(i, '', { tpl: tpl, fallbackLang: docLang, spaceAfter: 0, size: 12 }); continue; }
 
     if (l.isHeading) {
+      /* v39.11. A SECTION HEADING FOLLOWS THE DOCUMENT, NOT ITS OWN LETTERS.
+
+         Every paragraph in this file decides its direction from the script it
+         is written in, which is right for body text: an English bullet inside a
+         Hebrew resume reads left to right and belongs on the left. It is wrong
+         for a heading. A heading is furniture. It labels the column it sits at
+         the top of, and "IT Infrastructure" or "Technical Skills" standing
+         alone above Hebrew bullets was being detected as an English paragraph
+         and pushed to the left margin, leaving the section label on one side of
+         the page and everything it labels on the other.
+
+         The name and the contact line were given exactly this treatment already
+         - the comment three branches down says "follow the document, not their
+         own letters" - and headings were simply never included. Passing lang
+         rather than fallbackLang is the whole change: docxParagraph uses lang
+         as given and only falls back to sniffing the text when it is absent. */
       body += para(i, headingText(l.text, tpl), {
-        tpl: tpl, fallbackLang: docLang, bold: true, keepNext: true, size: tpl.headSize, color: tpl.headColor,
+        tpl: tpl, lang: docLang, noLinks: true, bold: true, keepNext: true, size: tpl.headSize, color: tpl.headColor,
         rule: tpl.headRule, rulePad: 4, shade: tpl.headShade, track: tpl.headTrack,
         sepRule: APP.sectionRule && !isFirstHeading(doc, i) && !tpl.headShade,
         spaceBefore: tpl.headBefore, spaceAfter: tpl.headAfter
@@ -15193,7 +15773,8 @@ function buildDocxXml(text, tplKey) {
 
   var rtlDoc = TT_LANG.dir(docLang) === 'rtl';
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+    ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
     '<w:body>' + body +
     '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
     /* ---------- these margins are not decorative ----------
@@ -15231,19 +15812,62 @@ async function exportDocx(text, filename, tplKey) {
   zip.file('[Content_Types].xml', DOCX_CT);
   zip.folder('_rels').file('.rels', DOCX_RELS);
   var word = zip.folder('word');
+  /* Order matters: the body is written first because writing it is what
+     discovers the links and fills the relationship table. */
   word.file('document.xml', buildDocxXml(text, tplKey));
   word.file('styles.xml', docxStyles(templateByKey(tplKey || APP.template), docxIsRtl(text), docDirLang(parseResume(text))));
-  word.folder('_rels').file('document.xml.rels', DOCX_DOC_RELS);
+  word.folder('_rels').file('document.xml.rels', docxRelsXml());
   var blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-  triggerDownload(blob, filename || 'TrueTailor_CV.docx');
+  await triggerDownload(blob, filename || 'TrueTailor_CV.docx');
   return blob;
 }
 
-function triggerDownload(blob, filename) {
+/* v39.11. SAVING WHERE THE CANDIDATE WANTS IT, UNDER THE NAME THEY WANT.
+
+   The anchor below drops the file into the downloads folder under a name this
+   app chose, silently. That is wrong for the one artefact of the whole run: a
+   person tailors a resume per posting and needs it saved as the posting, in the
+   folder they keep that application in, not as TrueTailor_CV.docx alongside
+   eleven other files with the same name and a bracketed number.
+
+   showSaveFilePicker opens the operating system's own save dialog. Where it
+   exists the candidate types the name and picks the folder; where it does not,
+   or where they cancel, the anchor still runs and nothing is worse than before.
+   Cancelling is a decision and not an error: it returns quietly rather than
+   pushing the file through anyway, which would defeat the point of asking. */
+function ttFileKind(filename) {
+  var f = String(filename || '').toLowerCase();
+  if (/\.docx$/.test(f)) return { description: H('מסמך Word'), accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } };
+  if (/\.pdf$/.test(f))  return { description: H('קובץ PDF'), accept: { 'application/pdf': ['.pdf'] } };
+  if (/\.txt$/.test(f))  return { description: H('קובץ טקסט'), accept: { 'text/plain': ['.txt'] } };
+  return { description: H('קובץ'), accept: { 'application/octet-stream': ['.' + (f.split('.').pop() || 'bin')] } };
+}
+
+async function triggerDownload(blob, filename) {
+  var name = filename || 'TrueTailor_CV.docx';
+  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+    try {
+      var handle = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [ttFileKind(name)]
+      });
+      var ws = await handle.createWritable();
+      await ws.write(blob);
+      await ws.close();
+      setStatus(H('הקובץ נשמר.'));
+      return;
+    } catch (e) {
+      /* AbortError is the candidate pressing cancel, and it is honoured. Any
+         other failure - a permission refused, a picker the browser exposes but
+         will not open from this context - falls through to the plain download
+         so the file is never simply lost. */
+      if (e && (e.name === 'AbortError' || e.code === 20)) return;
+    }
+  }
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -15383,7 +16007,7 @@ function buildPrintHtml(text, tplKey) {
     }
     if (l.cat === 'header') {
       html += '<p' + attrs(l) + 'font-size:' + pt(tpl.bodySize) + ';color:#' + tpl.contactColor + ';margin:0 0 1pt;' + headRule + '">' +
-              escapeHtml(l.raw.trim()) + '</p>';
+              ttLinkedHtml(l.raw.trim()) + '</p>';
       continue;
     }
     var plainOnly = (l.cat === 'military' || l.cat === 'languages');
@@ -15408,7 +16032,7 @@ function buildPrintHtml(text, tplKey) {
        not at all, rather than leaving its first line at the foot of a page. */
     html += '<p' + attrs(l) + 'break-inside:avoid;page-break-inside:avoid;font-size:' + pt(tpl.bodySize) + ';text-align:justify;margin:0 0 ' + twip(tpl.bodyAfter) + ';' + bulletPad +
             'white-space:pre-wrap">' + (l.type === 'bullet' ? escapeHtml(bulletGlyph(l.marker)) + ' ' : '') +
-            runsToHtml(emphasisRuns(l.text, l.cat), { metrics: 'plain' }) + '</p>';
+            runsToHtml(ttRunsWithLinks(emphasisRuns(l.text, l.cat), l.text), { metrics: 'plain' }) + '</p>';
   }
   return '<div class="tt-sheet" dir="' + pageDir + '" style="direction:' + pageDir + ';text-align:' + (pageDir === 'rtl' ? 'right' : 'left') +
          ';font-family:' + tpl.css + ';color:#000;background:#fff;padding:' + TT_MARGIN_MM + 'mm;line-height:1.32">' + html + '</div>';
@@ -16349,6 +16973,7 @@ function startOverAll() {
 function resetRun() {
   clearError();
   APP.doc = null; APP.signals = null; APP.coverage = []; APP.gaps = []; APP.queue = [];
+  APP.linkMap = {};
   /* The two readings of the fit and the sentence written about them belong to
      ONE pairing of one resume with one posting. They were never cleared here,
      so a second run in the same session opened with the previous job's verdict
@@ -16379,7 +17004,7 @@ function resetRun() {
   APP.summaryGate = null; APP.manualEdits = false;
   if (typeof setStage === 'function') setStage(1);
   APP.chat = { history: [], turns: [], qa: [], lang: APP.chat.lang, langSeq: APP.chat.langSeq || 0,
-               asked: 0, max: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
+               asked: 0, max: 8, gapMax: 8, done: false, pendingQuestion: '', pendingReqId: '', pendingReqIds: [],
                closingAsked: false, isClosing: false, finishNote: '',
                lastTurnMessage: '' };
   if (typeof showChatRetry === 'function') showChatRetry(false);
@@ -18333,6 +18958,8 @@ var TT_I18N = (function () {
   put('btn.restart_q', '#btnRestartQ', ['↻ התחל את כל השאלות מחדש', '↻ ابدأ كل الأسئلة من جديد', '↻ Start all the questions over', '↻ Recommencer toutes les questions', '↻ Empezar todas las preguntas de nuevo', '↻ Alle Fragen neu beginnen', '↻ Ricomincia tutte le domande', '↻ Recomeçar todas as perguntas', '↻ Počni sva pitanja ispočetka', '↻ Начать все вопросы заново', '↻ 質問を最初からやり直す', '↻ सभी प्रश्न फिर से शुरू करें']);
   put('chat.nav_note', '#chatNavNote', ['חזרה אחורה מחזירה גם את התשובה שכתבת. התחלה מחדש מוחקת את כל התשובות.', 'الرجوع يعيد أيضًا الإجابة التي كتبتها. البدء من جديد يحذف كل الإجابات.', 'Going back brings your answer back with it. Starting over deletes every answer.', 'Revenir en arrière ramène aussi votre réponse. Recommencer supprime toutes les réponses.', 'Volver atrás recupera también tu respuesta. Empezar de nuevo borra todas las respuestas.', 'Ein Schritt zurück bringt Ihre Antwort mit. Ein Neustart löscht alle Antworten.', 'Tornare indietro riporta anche la tua risposta. Ricominciare cancella tutte le risposte.', 'Voltar traz de volta a sua resposta. Recomeçar apaga todas as respostas.', 'Povratak vraća i vaš odgovor. Novi početak briše sve odgovore.', 'Возврат вернёт и ваш ответ. Начать заново удалит все ответы.', '戻ると入力した回答も戻ります。やり直すと回答はすべて削除されます。', 'पीछे जाने पर आपका उत्तर भी लौट आता है। फिर से शुरू करने पर सभी उत्तर मिट जाते हैं।']);
   put('answers.dirty', '#answersDirtyText', ['תשובה השתנתה. הגרסה ואחוז ההתאמה עדיין בנויים על התשובה הקודמת.', 'تغيّرت إجابة. النسخة ونسبة المطابقة ما زالتا مبنيتين على الإجابة السابقة.', 'An answer changed. The version and the match figure are still built on the previous one.', 'Une réponse a changé. La version et le taux de correspondance reposent encore sur la précédente.', 'Una respuesta cambió. La versión y el porcentaje de coincidencia siguen basados en la anterior.', 'Eine Antwort hat sich geändert. Version und Übereinstimmungswert beruhen noch auf der vorherigen.', 'Una risposta è cambiata. La versione e la percentuale di corrispondenza si basano ancora sulla precedente.', 'Uma resposta mudou. A versão e a porcentagem de correspondência ainda se baseiam na anterior.', 'Odgovor je promijenjen. Verzija i postotak podudarnosti još se temelje na prethodnom.', 'Ответ изменился. Версия и процент соответствия всё ещё построены на прежнем.', '回答が変わりました。作成済みの版と一致率はまだ以前の回答に基づいています。', 'एक उत्तर बदला है। संस्करण और मिलान प्रतिशत अब भी पिछले उत्तर पर आधारित हैं।']);
+  put('answers.dirty2', '#answersDirtyText2', ['תשובה השתנתה. הגרסה ואחוז ההתאמה שלמטה עדיין בנויים על התשובה הקודמת.', 'تغيّرت إجابة. النسخة ونسبة المطابقة أدناه ما زالتا مبنيتين على الإجابة السابقة.', 'An answer changed. The version and the match figure below are still built on the previous one.', 'Une réponse a changé. La version et le taux de correspondance ci-dessous reposent encore sur la précédente.', 'Una respuesta cambió. La versión y el porcentaje de coincidencia de abajo siguen basados en la anterior.', 'Eine Antwort hat sich geändert. Version und Übereinstimmungswert unten beruhen noch auf der vorherigen.', 'Una risposta è cambiata. La versione e la percentuale di corrispondenza qui sotto si basano ancora sulla precedente.', 'Uma resposta mudou. A versão e a porcentagem de correspondência abaixo ainda se baseiam na anterior.', 'Odgovor je promijenjen. Verzija i postotak podudarnosti ispod još se temelje na prethodnom.', 'Ответ изменился. Версия и процент соответствия ниже всё ещё построены на прежнем.', '回答が変わりました。下の版と一致率は、まだ以前の回答に基づいています。', 'एक उत्तर बदला है। नीचे का संस्करण और मिलान प्रतिशत अब भी पिछले उत्तर पर आधारित हैं।']);
+  put('btn.rebuild_answers2', '#btnRebuildFromAnswers2', ['בנה מחדש מהתשובות', 'أعد البناء من الإجابات', 'Rebuild from the answers', 'Reconstruire à partir des réponses', 'Reconstruir a partir de las respuestas', 'Aus den Antworten neu erstellen', 'Ricostruisci dalle risposte', 'Reconstruir a partir das respostas', 'Ponovno izgradi iz odgovora', 'Пересобрать по ответам', '回答から作り直す', 'उत्तरों से दोबारा बनाएँ']);
   put('btn.rebuild_answers', '#btnRebuildFromAnswers', ['בנה מחדש מהתשובות', 'أعد البناء من الإجابات', 'Rebuild from the answers', 'Reconstruire à partir des réponses', 'Reconstruir a partir de las respuestas', 'Aus den Antworten neu erstellen', 'Ricostruisci dalle risposte', 'Reconstruir a partir das respostas', 'Ponovno izgradi iz odgovora', 'Пересобрать по ответам', '回答から作り直す', 'उत्तरों से दोबारा बनाएँ']);
   put('btn.restart_from_answers', '#btnRestartFromAnswers', ['↻ חזור לשאלות והתחל אותן מחדש', '↻ ارجع إلى الأسئلة وابدأها من جديد', '↻ Go back to the questions and start them over', '↻ Revenir aux questions et les recommencer', '↻ Volver a las preguntas y empezarlas de nuevo', '↻ Zurück zu den Fragen und neu beginnen', '↻ Torna alle domande e ricominciale', '↻ Voltar às perguntas e recomeçá-las', '↻ Vrati se na pitanja i počni ih ispočetka', '↻ Вернуться к вопросам и начать их заново', '↻ 質問に戻って最初からやり直す', '↻ प्रश्नों पर लौटें और फिर से शुरू करें']);
 
@@ -19295,6 +19922,24 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'מסמך Word':['مستند Word','Word document','Document Word','Documento de Word','Word-Dokument','Documento Word','Documento do Word','Word dokument','Документ Word','Word 文書','Word दस्तावेज़'],
+'קובץ PDF':['ملف PDF','PDF file','Fichier PDF','Archivo PDF','PDF-Datei','File PDF','Arquivo PDF','PDF datoteka','Файл PDF','PDF ファイル','PDF फ़ाइल'],
+'קובץ טקסט':['ملف نصي','Text file','Fichier texte','Archivo de texto','Textdatei','File di testo','Arquivo de texto','Tekstualna datoteka','Текстовый файл','テキストファイル','पाठ फ़ाइल'],
+'קובץ':['ملف','File','Fichier','Archivo','Datei','File','Arquivo','Datoteka','Файл','ファイル','फ़ाइल'],
+'הקובץ נשמר.':['تم حفظ الملف.','The file has been saved.','Le fichier a été enregistré.','El archivo se ha guardado.','Die Datei wurde gespeichert.','Il file è stato salvato.','O arquivo foi salvo.','Datoteka je spremljena.','Файл сохранён.','ファイルを保存しました。','फ़ाइल सहेज ली गई।'],
+'השילוב מחדש נעצר בגלל שגיאה: ':['توقف الدمج من جديد بسبب خطأ: ','The reinsertion stopped because of an error: ','La réintégration s\'est arrêtée à cause d\'une erreur : ','La reinserción se detuvo por un error: ','Das erneute Einfügen wurde durch einen Fehler gestoppt: ','Il reinserimento si è fermato per un errore: ','A reinserção parou por causa de um erro: ','Ponovno uvrštavanje zaustavljeno je zbog pogreške: ','Повторное включение остановлено из-за ошибки: ','組み込みのやり直しはエラーで停止しました：','दोबारा जोड़ना एक त्रुटि के कारण रुक गया: '],
+'⚠ עדיין לא נכנס לקורות החיים':['⚠ لم يدخل السيرة الذاتية بعد','⚠ has not made it into the resume yet','⚠ n\'est pas encore entré dans le CV','⚠ todavía no ha entrado en el currículum','⚠ noch nicht im Lebenslauf angekommen','⚠ non è ancora entrato nel CV','⚠ ainda não entrou no currículo','⚠ još nije ušlo u životopis','⚠ пока не попало в резюме','⚠ まだ履歴書に入っていません','⚠ अभी बायोडाटा में नहीं गया'],
+'התשובה הזו עדיין לא נכנסה לאף שורה. אם מה שסיפרת הוא ניסיון מקביל ולא בדיוק מה שנשאל, זה עדיין שווה משהו למגייס — אפשר לבקש לנסח אותו ולשלב אותו כפי שהוא, בלי לתאר אותו כמשהו אחר.':['لم تدخل هذه الإجابة أي سطر بعد. إذا كان ما رويته خبرة موازية وليس تمامًا ما سُئل عنه، فهو ما زال يساوي شيئًا للمسؤول عن التوظيف — يمكنك أن تطلب صياغته ودمجه كما هو، دون وصفه بأنه شيء آخر.','This answer has not gone into any line yet. If what you described is parallel experience rather than exactly what was asked, it is still worth something to a recruiter — you can ask for it to be worded and worked in as it is, without describing it as something else.','Cette réponse n\'est encore entrée dans aucune ligne. Si ce que vous avez décrit est une expérience parallèle et non exactement ce qui était demandé, cela vaut quand même quelque chose pour un recruteur — vous pouvez demander qu\'elle soit formulée et intégrée telle quelle, sans la présenter comme autre chose.','Esta respuesta todavía no ha entrado en ninguna línea. Si lo que contaste es experiencia paralela y no exactamente lo que se preguntaba, sigue valiendo algo para un reclutador: puedes pedir que se redacte y se incorpore tal cual, sin describirla como otra cosa.','Diese Antwort ist noch in keine Zeile eingegangen. Wenn das, was Sie geschildert haben, eine parallele Erfahrung ist und nicht genau das Gefragte, ist es für eine Personalauswahl trotzdem etwas wert — Sie können verlangen, dass es so, wie es ist, formuliert und eingearbeitet wird, ohne es als etwas anderes auszugeben.','Questa risposta non è ancora entrata in nessuna riga. Se quello che hai raccontato è un\'esperienza parallela e non esattamente ciò che era stato chiesto, vale comunque qualcosa per un selezionatore: puoi chiedere che venga formulata e inserita così com\'è, senza descriverla come qualcos\'altro.','Esta resposta ainda não entrou em nenhuma linha. Se o que você contou é experiência paralela e não exatamente o que foi perguntado, ainda vale algo para um recrutador — você pode pedir que seja redigida e incorporada como está, sem descrevê-la como outra coisa.','Ovaj odgovor još nije ušao ni u jedan redak. Ako je ono što ste ispričali usporedno iskustvo, a ne točno ono što se pitalo, regruteru i dalje nešto vrijedi — možete zatražiti da se formulira i uvrsti kakvo jest, bez opisivanja kao nečega drugog.','Этот ответ пока не вошёл ни в одну строку. Если вы описали параллельный опыт, а не ровно то, о чём спрашивали, для рекрутера он всё равно чего-то стоит — можно попросить сформулировать и вписать его как есть, не выдавая за что-то другое.','この回答は、まだどの行にも入っていません。あなたが話したのが、問われたことそのものではなく並行する経験だったとしても、採用担当者にとっては価値があります。別のものとして書き換えることなく、そのまま言葉にして組み込むよう頼めます。','यह उत्तर अभी किसी पंक्ति में नहीं गया है। यदि आपने जो बताया वह समानांतर अनुभव है, ठीक वही नहीं जो पूछा गया था, तब भी वह भर्तीकर्ता के लिए कुछ मूल्य रखता है — आप कह सकते हैं कि उसे जैसा है वैसा ही शब्दबद्ध कर के जोड़ा जाए, उसे कुछ और बताए बिना।'],
+'נסה לשלב את התשובה הזו':['حاول دمج هذه الإجابة','Try to work this answer in','Essayer d\'intégrer cette réponse','Intentar incorporar esta respuesta','Diese Antwort einarbeiten','Prova a inserire questa risposta','Tentar incorporar esta resposta','Pokušaj uvrstiti ovaj odgovor','Попробовать вписать этот ответ','この回答を組み込んでみる','इस उत्तर को जोड़ने का प्रयास करें'],
+'הגענו לתקרת השאלות ונשארו פערים פתוחים.':['بلغنا سقف الأسئلة وبقيت فجوات مفتوحة.','We reached the question ceiling and gaps are still open.','Nous avons atteint le plafond de questions et des écarts restent ouverts.','Llegamos al límite de preguntas y quedan brechas abiertas.','Wir haben die Fragenobergrenze erreicht, und es bleiben Lücken offen.','Abbiamo raggiunto il tetto delle domande e restano lacune aperte.','Chegamos ao teto de perguntas e ainda há lacunas abertas.','Dosegli smo gornju granicu pitanja, a nedostaci su ostali otvoreni.','Мы достигли предела по вопросам, и пробелы остались незакрытыми.','質問の上限に達しましたが、不足はまだ残っています。','प्रश्नों की सीमा आ गई और कुछ अंतर खुले रह गए।'],
+' פערים נשארו פתוחים ולא נסגרו בשיחה.':[' فجوات بقيت مفتوحة ولم تُغلق في المحادثة.',' gaps were left open and were not closed in the conversation.',' écarts sont restés ouverts et n\'ont pas été comblés dans la conversation.',' brechas quedaron abiertas y no se cerraron en la conversación.',' Lücken sind offen geblieben und wurden im Gespräch nicht geschlossen.',' lacune sono rimaste aperte e non sono state colmate nella conversazione.',' lacunas ficaram abertas e não foram fechadas na conversa.',' nedostataka ostalo je otvoreno i nije zatvoreno u razgovoru.',' пробелов остались открытыми и не были закрыты в разговоре.','件の不足が埋まらないまま残りました。',' अंतर खुले रह गए और बातचीत में बंद नहीं हुए।'],
+'הפערים האלה נספרים בציון ההתאמה כפי שהם, ומה שלא נאמר עליהם לא ייכנס לקורות החיים - כי האפליקציה לא ממציאה מה שלא נמסר לה. אפשר לחזור לשאלות ולענות עליהם, וההתאמה תימדד מחדש.':['تُحتسب هذه الفجوات في درجة المطابقة كما هي، وما لم يُقَل عنها لن يدخل السيرة الذاتية — لأن التطبيق لا يختلق ما لم يُمنَح له. يمكنكم العودة إلى الأسئلة والإجابة عنها، وستُقاس المطابقة من جديد.','These gaps are counted in the fit score exactly as they stand, and whatever was not said about them will not go into the resume, because the app does not invent what it was not told. You can go back to the questions and answer them, and the fit will be measured again.','Ces écarts sont comptés tels quels dans le score d\'adéquation, et ce qui n\'a pas été dit à leur sujet n\'entrera pas dans le CV, car l\'application n\'invente pas ce qu\'on ne lui a pas donné. Vous pouvez revenir aux questions et y répondre, et l\'adéquation sera mesurée à nouveau.','Estas brechas se cuentan en la puntuación de ajuste tal como están, y lo que no se dijo sobre ellas no entrará en el currículum, porque la aplicación no inventa lo que no se le ha contado. Puedes volver a las preguntas y responderlas, y el ajuste se medirá de nuevo.','Diese Lücken zählen so, wie sie sind, in den Passungswert, und was zu ihnen nicht gesagt wurde, kommt nicht in den Lebenslauf, denn die App erfindet nicht, was ihr nicht mitgeteilt wurde. Sie können zu den Fragen zurückkehren und sie beantworten, dann wird die Passung erneut gemessen.','Queste lacune vengono contate nel punteggio di corrispondenza così come sono, e ciò che non è stato detto al riguardo non entrerà nel CV, perché l\'app non inventa quello che non le è stato raccontato. Puoi tornare alle domande e rispondere, e la corrispondenza sarà misurata di nuovo.','Essas lacunas são contadas na pontuação de adequação exatamente como estão, e o que não foi dito sobre elas não entrará no currículo, porque o app não inventa aquilo que não lhe foi contado. Você pode voltar às perguntas e respondê-las, e a adequação será medida de novo.','Ovi se nedostaci u rezultatu podudarnosti broje onakvi kakvi jesu, a ono što o njima nije rečeno neće ući u životopis, jer aplikacija ne izmišlja ono što joj nije rečeno. Možete se vratiti na pitanja i odgovoriti na njih, pa će se podudarnost izmjeriti ponovno.','Эти пробелы учитываются в оценке соответствия ровно такими, какие они есть, и то, что о них не было сказано, в резюме не попадёт: приложение не выдумывает того, чего ему не сообщили. Можно вернуться к вопросам и ответить на них — соответствие будет измерено заново.','これらの不足は、そのままの形で適合スコアに数えられます。そして語られなかったことは履歴書に入りません。このアプリは、伝えられていないことを作り出さないからです。質問に戻って答えれば、適合はもう一度測り直されます。','ये अंतर जैसे हैं वैसे ही मिलान अंक में गिने जाते हैं, और उनके बारे में जो नहीं कहा गया वह बायोडाटा में नहीं जाएगा — क्योंकि ऐप वह नहीं गढ़ता जो उसे बताया नहीं गया। आप प्रश्नों पर लौटकर उत्तर दे सकते हैं, और मिलान फिर से मापा जाएगा।'],
+'. המספר כולל שאלה אחת בסוף שאינה על פער מסוים, ואפשר לדלג עליה. אם הפערים ייסגרו קודם, השיחה תסתיים מוקדם יותר.':['. يشمل العدد سؤالًا أخيرًا لا يتعلق بفجوة بعينها، ويمكن تخطّيه. وإذا أُغلقت الفجوات قبل ذلك، ستنتهي المحادثة مبكرًا.','. The number includes one question at the end that is not about a particular gap, and it can be skipped. If the gaps close sooner, the conversation ends sooner.','. Le nombre inclut une question finale qui ne porte pas sur un écart précis, et qu\'on peut passer. Si les écarts se comblent avant, la conversation se termine plus tôt.','. El número incluye una pregunta final que no trata de una brecha concreta y que se puede saltar. Si las brechas se cierran antes, la conversación termina antes.','. Die Zahl schließt eine letzte Frage ein, die sich nicht auf eine bestimmte Lücke bezieht und übersprungen werden kann. Schließen sich die Lücken früher, endet das Gespräch früher.','. Il numero include una domanda finale che non riguarda una lacuna specifica e che si può saltare. Se le lacune si chiudono prima, la conversazione finisce prima.','. O número inclui uma pergunta final que não é sobre uma lacuna específica e pode ser pulada. Se as lacunas fecharem antes, a conversa termina antes.','. Broj uključuje jedno završno pitanje koje se ne odnosi na određeni nedostatak i može se preskočiti. Ako se nedostaci zatvore prije, razgovor završava ranije.','. В это число входит один заключительный вопрос, не относящийся к конкретному пробелу; его можно пропустить. Если пробелы закроются раньше, разговор закончится раньше.','。この数には、特定の不足についてではない最後の質問が一つ含まれており、とばすこともできます。不足が先に埋まれば、対話はより早く終わります。','। इस संख्या में अंत का एक प्रश्न शामिल है जो किसी विशेष अंतर के बारे में नहीं है, और उसे छोड़ा जा सकता है। यदि अंतर पहले भर जाएँ, तो बातचीत जल्दी समाप्त हो जाएगी।'],
+' פערים לא נבדקו בשיחה ונשארו פתוחים:</div><div>':[' فجوات لم تُفحص في المحادثة وبقيت مفتوحة:</div><div>',' gaps were not examined in the conversation and are still open:</div><div>',' écarts n\'ont pas été examinés dans la conversation et restent ouverts :</div><div>',' brechas no se examinaron en la conversación y siguen abiertas:</div><div>',' Lücken wurden im Gespräch nicht geprüft und sind offen geblieben:</div><div>',' lacune non sono state esaminate nella conversazione e restano aperte:</div><div>',' lacunas não foram examinadas na conversa e continuam abertas:</div><div>',' nedostataka nije razmotreno u razgovoru i ostali su otvoreni:</div><div>',' пробелов не были разобраны в разговоре и остались открытыми:</div><div>','件の不足は対話で確認されず、開いたままです：</div><div>',' अंतर बातचीत में नहीं जाँचे गए और खुले रह गए:</div><div>'],
+'דילוג משאיר את הפער הזה פתוח, והוא ייספר ככה בציון ההתאמה. מה שלא תספר עליו לא ייכנס לקורות החיים.\n\nלדלג?':['التخطي يترك هذه الفجوة مفتوحة، وستُحتسب هكذا في درجة المطابقة. وما لن تخبر به عنها لن يدخل السيرة الذاتية.\n\nهل تتخطى؟','Skipping leaves this gap open, and it will be counted that way in the fit score. Whatever you do not tell it will not go into the resume.\n\nSkip?','Passer laisse cet écart ouvert, et il sera compté ainsi dans le score d\'adéquation. Ce que vous ne direz pas n\'entrera pas dans le CV.\n\nPasser ?','Saltarla deja esta brecha abierta, y así se contará en la puntuación de ajuste. Lo que no cuentes no entrará en el currículum.\n\n¿Saltar?','Überspringen lässt diese Lücke offen, und so wird sie im Passungswert gezählt. Was Sie nicht erzählen, kommt nicht in den Lebenslauf.\n\nÜberspringen?','Saltare lascia questa lacuna aperta, e così verrà contata nel punteggio di corrispondenza. Ciò che non racconti non entrerà nel CV.\n\nSaltare?','Pular deixa esta lacuna aberta, e assim ela será contada na pontuação de adequação. O que você não contar não entrará no currículo.\n\nPular?','Preskakanje ostavlja ovaj nedostatak otvorenim i tako će biti uračunat u rezultat podudarnosti. Ono što ne ispričate neće ući u životopis.\n\nPreskočiti?','Пропуск оставит этот пробел открытым, и так он будет учтён в оценке соответствия. То, о чём вы не расскажете, в резюме не попадёт.\n\nПропустить?','とばすと、この不足は開いたままになり、そのまま適合スコアに数えられます。話さなかったことは履歴書に入りません。\n\nとばしますか。','छोड़ने पर यह अंतर खुला रह जाएगा और मिलान अंक में वैसे ही गिना जाएगा। जो आप नहीं बताएँगे वह बायोडाटा में नहीं जाएगा।\n\nछोड़ें?'],
+'נשארו ':['بقيت ','There are still ','Il reste ','Quedan ','Es bleiben ','Restano ','Ainda restam ','Ostalo je ','Осталось ','残りは','अभी भी '],
+' פערים פתוחים שהשיחה לא הספיקה לכסות:\n\n':[' فجوات مفتوحة لم تتّسع المحادثة لتغطيتها:\n\n',' open gaps that the conversation did not get to:\n\n',' écarts ouverts que la conversation n\'a pas eu le temps de couvrir :\n\n',' brechas abiertas que la conversación no alcanzó a cubrir:\n\n',' offene Lücken, für die das Gespräch nicht mehr gereicht hat:\n\n',' lacune aperte che la conversazione non ha fatto in tempo a coprire:\n\n',' lacunas abertas que a conversa não conseguiu cobrir:\n\n',' otvorenih nedostataka koje razgovor nije stigao pokriti:\n\n',' открытых пробелов, до которых разговор не дошёл:\n\n','件の不足が、対話では扱いきれずに残っています：\n\n',' खुले अंतर हैं जिन तक बातचीत नहीं पहुँच पाई:\n\n'],
+'\n\nהם ייספרו בציון ההתאמה כפערים פתוחים, ומה שלא סיפרת עליהם לא ייכנס לקורות החיים.\n\nלסיים בכל זאת?':['\n\nستُحتسب في درجة المطابقة كفجوات مفتوحة، وما لم تروِه عنها لن يدخل السيرة الذاتية.\n\nهل تنهي رغم ذلك؟','\n\nThey will be counted in the fit score as open gaps, and whatever you did not tell about them will not go into the resume.\n\nFinish anyway?','\n\nIls seront comptés dans le score d\'adéquation comme des écarts ouverts, et ce que vous n\'avez pas dit à leur sujet n\'entrera pas dans le CV.\n\nTerminer quand même ?','\n\nSe contarán en la puntuación de ajuste como brechas abiertas, y lo que no contaste sobre ellas no entrará en el currículum.\n\n¿Terminar de todos modos?','\n\nSie werden im Passungswert als offene Lücken gezählt, und was Sie dazu nicht erzählt haben, kommt nicht in den Lebenslauf.\n\nTrotzdem beenden?','\n\nSaranno contate nel punteggio di corrispondenza come lacune aperte, e ciò che non hai raccontato non entrerà nel CV.\n\nTerminare comunque?','\n\nElas serão contadas na pontuação de adequação como lacunas abertas, e o que você não contou sobre elas não entrará no currículo.\n\nTerminar mesmo assim?','\n\nU rezultatu podudarnosti bit će uračunati kao otvoreni nedostaci, a ono što o njima niste ispričali neće ući u životopis.\n\nSvejedno završiti?','\n\nВ оценке соответствия они будут учтены как открытые пробелы, и то, о чём вы не рассказали, в резюме не попадёт.\n\nВсё равно завершить?','\n\nこれらは開いた不足として適合スコアに数えられ、話さなかったことは履歴書に入りません。\n\nそれでも終了しますか。','\n\nये मिलान अंक में खुले अंतर के रूप में गिने जाएँगे, और उनके बारे में जो आपने नहीं बताया वह बायोडाटा में नहीं जाएगा।\n\nफिर भी समाप्त करें?'],
 'שני חלקי המדידה נקראו על ידי מודלים שונים. שתי המחציות של הציון הזה לא נמדדו באותו כלי.':['قرأ جزأي القياس نموذجان مختلفان. لم يُقَس نصفا هذه الدرجة بالأداة نفسها.','The two halves of the measurement were read by different models. They were not taken with the same instrument.','Les deux moitiés de la mesure ont été lues par des modèles différents. Elles n\'ont pas été prises avec le même instrument.','Las dos mitades de la medición fueron leídas por modelos distintos. No se tomaron con el mismo instrumento.','Die beiden Hälften der Messung wurden von verschiedenen Modellen gelesen. Sie stammen nicht vom selben Instrument.','Le due metà della misura sono state lette da modelli diversi. Non sono state prese con lo stesso strumento.','As duas metades da medição foram lidas por modelos diferentes. Não foram feitas com o mesmo instrumento.','Dvije polovice mjerenja pročitala su različita modela. Nisu snimljene istim instrumentom.','Две половины измерения прочитаны разными моделями. Они сняты не одним и тем же инструментом.','測定の二つの部分は、それぞれ別のモデルが読み取りました。同じ計器で測られていません。','माप के दोनों हिस्से अलग-अलग मॉडलों ने पढ़े। ये एक ही उपकरण से नहीं लिए गए।'],
 'המדידה לא נעשתה על ידי המודל החזק ביותר שהמפתח שלך מגיע אליו, אלא על ידי מודל גיבוי.':['لم يُجرِ القياس أقوى نموذج يصل إليه مفتاحك، بل نموذج احتياطي.','The measurement was not taken by the strongest model your key can reach, but by a backup model.','La mesure n\'a pas été effectuée par le modèle le plus puissant accessible à votre clé, mais par un modèle de secours.','La medición no la hizo el modelo más potente al que llega tu clave, sino un modelo de reserva.','Die Messung stammt nicht vom stärksten Modell, das Ihr Schlüssel erreicht, sondern von einem Ersatzmodell.','La misura non è stata presa dal modello più potente che la tua chiave raggiunge, ma da un modello di riserva.','A medição não foi feita pelo modelo mais forte que a sua chave alcança, e sim por um modelo reserva.','Mjerenje nije obavio najjači model do kojega vaš ključ doseže, nego rezervni model.','Измерение выполнила не самая сильная модель, доступная вашему ключу, а резервная.','この測定は、あなたのキーが到達できるもっとも強いモデルではなく、予備のモデルが行いました。','यह माप उस सबसे सशक्त मॉडल ने नहीं किया जिस तक आपकी कुंजी पहुँचती है, बल्कि एक बैकअप मॉडल ने किया।'],
 'הציון עשוי להיות שונה מריצה שנעשתה על המודל הרגיל, ובהתאמה בין שתי שפות ההבדל יכול להיות גדול. אם זה חוזר על עצמו, אפס את מודל המדידה בהגדרות והרץ שוב.':['قد تختلف الدرجة عن تشغيل جرى على النموذج المعتاد، وفي المطابقة بين لغتين قد يكون الفارق كبيرًا. إذا تكرّر ذلك، أعِد ضبط نموذج القياس في الإعدادات وشغّل مرة أخرى.','The score may differ from a run taken on the usual model, and when the resume and the posting are in different languages the difference can be large. If this keeps happening, reset the measuring model in Settings and run again.','Le score peut différer d\'une exécution faite sur le modèle habituel, et lorsque le CV et l\'offre sont dans des langues différentes l\'écart peut être important. Si cela se répète, réinitialisez le modèle de mesure dans les Réglages et relancez.','La puntuación puede diferir de una ejecución hecha con el modelo habitual, y cuando el currículum y la oferta están en idiomas distintos la diferencia puede ser grande. Si se repite, restablece el modelo de medición en Ajustes y vuelve a ejecutar.','Der Wert kann von einem Durchlauf auf dem üblichen Modell abweichen, und wenn Lebenslauf und Stelle in verschiedenen Sprachen verfasst sind, kann der Unterschied groß sein. Wiederholt sich das, setzen Sie das Messmodell in den Einstellungen zurück und starten Sie erneut.','Il punteggio può differire da un\'esecuzione fatta sul modello abituale, e quando il CV e l\'annuncio sono in lingue diverse la differenza può essere ampia. Se si ripete, reimposta il modello di misura nelle Impostazioni ed esegui di nuovo.','A pontuação pode diferir de uma execução feita no modelo habitual, e quando o currículo e a vaga estão em idiomas diferentes a diferença pode ser grande. Se isso se repetir, redefina o modelo de medição nas Configurações e execute de novo.','Rezultat se može razlikovati od pokretanja na uobičajenom modelu, a kad su životopis i oglas na različitim jezicima razlika može biti velika. Ako se ponavlja, poništite model mjerenja u Postavkama i pokrenite ponovno.','Оценка может отличаться от запуска на обычной модели, а когда резюме и вакансия написаны на разных языках, разница может быть большой. Если это повторяется, сбросьте модель измерения в настройках и запустите снова.','このスコアは、通常のモデルで行った実行とは異なる場合があります。履歴書と求人が別の言語で書かれているときは、差が大きくなることがあります。繰り返すようなら、設定で測定モデルをリセットして、もう一度実行してください。','यह अंक सामान्य मॉडल पर किए गए रन से भिन्न हो सकता है, और जब बायोडाटा तथा पद अलग-अलग भाषाओं में हों तो अंतर बड़ा हो सकता है। यदि ऐसा बार-बार हो, तो सेटिंग्स में मापन मॉडल रीसेट करें और फिर से चलाएँ।'],
