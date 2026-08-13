@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.14';
+var TT_VERSION = 'v39.15';
 
 var APP = {
   apiKey: '',
@@ -6631,6 +6631,81 @@ function promptAnswerSpell(text, lang) {
   ].join('\n');
 }
 
+/* =========================================================================
+   WHO CHOOSES THE SUBJECT                                           v39.15
+
+   Until now: the app handed the model the queue and the model chose which
+   requirement to ask about, returning its choice as req_id. The app then took
+   that choice on trust and built everything downstream from it - which gap came
+   off the queue, what the writing stage was told the answer was for, what the
+   panel reported.
+
+   That is a decision the app has already made, better, in code. buildQueue
+   ranks by priority, significantQueueItems cuts the tail, clusterQueue merges
+   what one question can cover. All of it deterministic, all of it inspectable,
+   all of it thrown away at the moment it mattered.
+
+   And the cost was not theoretical. Reported: a queue holding a networks gap
+   and a financial sector gap, one question of budget, and the model spent it on
+   networks. The panel had promised the financial sector gap would be examined.
+   It never was. No amount of prompt wording fixes that, because the prompt is
+   asking rather than telling.
+
+   So the split changes. THE APP CHOOSES THE SUBJECT. THE MODEL WRITES THE
+   SENTENCE. The model is told which requirements this question is for and is
+   asked for one thing back: a question that will get them answered. req_id is
+   no longer read from the reply - it is known before the call is made.
+
+   What this buys beyond the ordering: pendingReqIds becomes certain. The map
+   from an answer to the gaps it closes stops depending on a model that never
+   saw the queue's ranking, which removes the whole family of failures where an
+   answer was recorded against the wrong requirement, or against none. */
+function nextChatSubject() {
+  var open = openSignificantGaps();
+  if (!open.length) return null;
+  /* clusterQueue already knows how to group the gaps one question can cover.
+     The head of that list is the subject, in the order the ranking put it. */
+  var clusters = clusterQueue(open, 18);
+  if (!clusters || !clusters.length) return null;
+  /* clusterQueue returns req_ids, not the queue rows, so the rows are looked
+     back up: the status on each one is what tells the model whether it is
+     asking about something absent or something half proved. */
+  var head = clusters[0];
+  var ids = [], seen = {}, items = [];
+  (head.req_ids || []).forEach(function (rid) {
+    var id = String(rid || '');
+    if (!id || seen[id] || !reqById(id)) return;
+    seen[id] = 1;
+    ids.push(id);
+    open.forEach(function (q) { if (String(q.req_id) === id) items.push(q); });
+  });
+  if (!ids.length) return null;
+  return { ids: ids, items: items };
+}
+
+/* What the model is told about the subject it did not choose. Names the
+   requirements, their kind and their status, because the SHAPE of what is
+   missing is what decides whether the question can be answered usefully: a
+   scale needs a number asked for by name, a tool needs a yes or a no. */
+function chatSubjectInstruction(subject) {
+  if (!subject) return '';
+  var lines = ['THIS QUESTION IS FOR THE FOLLOWING REQUIREMENTS, AND FOR NO OTHERS. They were chosen by priority before this turn and the choice is not yours to revisit.'];
+  subject.ids.forEach(function (id) {
+    var r = reqById(id);
+    if (!r) return;
+    var q = null;
+    (subject.items || []).forEach(function (it) { if (String(it.req_id) === String(id)) q = it; });
+    lines.push('  ' + id + '  [' + (r.kind || 'hard_skill') + (r.must_have ? ', must have' : '') + ']  ' +
+      String(r.text || '') + (q && q.status ? '   (currently: ' + q.status + ')' : ''));
+  });
+  lines.push('');
+  lines.push('Write ONE question that gets all of them answered at once if they belong together, and that gets the first of them answered if they do not.');
+  lines.push('ASK FOR THE SHAPE OF THE ANSWER, NOT ONLY FOR THE SUBJECT. A scale asks how many, and says how many of what. A duration asks how long. A tool asks whether they have used it and in what capacity. A question that can be answered "yes" produces an answer nothing can be built from.');
+  lines.push('Do not ask about anything outside this list. Whatever else is in the queue has its own turn coming, and a question that wanders costs the turn it was given.');
+  lines.push('Return the question only. The req_id field is ignored on this turn: it is already known.');
+  return lines.join('\n');
+}
+
 function chatTurnInstruction(questionLang, isFirst) {
   /* This told the model 'Hebrew' for every language that was not English, so
      a visitor who chose Croatian questions was asking the model, in writing,
@@ -6638,8 +6713,13 @@ function chatTurnInstruction(questionLang, isFirst) {
      question guard would have refused every attempt and the run would have
      stalled on a retry loop. */
   var qLangName = TT_LANG.name(questionLang);
-  return (isFirst ? 'Ask your first question, about the first item in the queue.' : 'Ask the next question, or set done to true if the queue is exhausted.') +
-    ' Write the question in ' + qLangName + '.' +
+  var subject = nextChatSubject();
+  var head = subject
+    ? chatSubjectInstruction(subject)
+    : (isFirst ? 'Ask your first question, about the first item in the queue.'
+               : 'Ask the next question, or set done to true if the queue is exhausted.');
+  return head +
+    '\n\nWrite the question in ' + qLangName + '.' +
     ' The question language is a display choice by the user and says nothing about the resume language: the resume lines keep their own language regardless.';
 }
 
@@ -10361,14 +10441,47 @@ function buildQueue() {
        the bottom, while the thing named in the role title goes unasked, is the
        cheapest way to waste the whole conversation. */
     var w = reqWeight(r.id);
+    /* v39.15. WHAT A QUESTION IS WORTH, NOT HOW IMPORTANT ITS SUBJECT IS.
+
+       The old ranking was base x (must_have ? 2 : 1) + weight/20: entirely a
+       measure of how much the posting cares. It left out the only thing that
+       decides whether asking is a good use of the candidate's patience, which
+       is HOW MUCH THE ANSWER CAN MOVE THE SCORE.
+
+       The two come apart constantly. A must have the resume already proves in
+       part is worth little - the requirement is already earning most of what it
+       can earn, and an answer adds the remainder. A must have the resume says
+       nothing about at all is worth everything, because the gate that caps the
+       whole result at level three is counting it. Under the old ranking those
+       two sorted together, by importance, and the near miss often won.
+
+       requirementValue is the same function the score itself uses, so this is
+       not a second opinion about worth: it is the score's own arithmetic, asked
+       what it would pay for an answer here. */
+    /* The signature is (coverageRow, requirement), and the row carries more than
+       the status - the adjacency and the magnitude both feed the price. So the
+       "what if this were proved" case is the real row with its status swapped,
+       not a synthetic one, which keeps everything else about it intact. */
+    var asDirect = {};
+    Object.keys(c || {}).forEach(function (k) { asDirect[k] = c[k]; });
+    asDirect.status = 'direct';
+    var now = requirementValue(c, r);
+    var best = requirementValue(asDirect, r);
+    var headroom = Math.max(0, (best || 0) - (now || 0));
+    /* An unproved must have is also holding the level ceiling down, and that is
+       worth more than its share of the percentage. */
+    var gateBonus = (r.must_have && c.status !== 'direct') ? 1.2 : 0;
     items.push({
       req_id: r.id,
       requirement: r.text,
       must_have: r.must_have,
       status: c.status,
       weight: w,
+      headroom: headroom,
       focus: c.question_focus || r.text,
-      priority: base * (r.must_have ? 2 : 1) + w / 20
+      /* Importance still counts - it decides how much the headroom is worth -
+         but it no longer decides alone. */
+      priority: base * (r.must_have ? 2 : 1) + w / 20 + headroom * (w / 100) * 6 + gateBonus
     });
   });
   /* The findings from stage 2 go in the queue too. Only red flags used to,
@@ -10893,6 +11006,12 @@ async function askQuestionTurn(userMessage) {
   }
   if (!openSignificantGaps().length && (APP.chat.qa || []).length) { finishChat(); return; }
 
+  /* Decided here, before the call, and read again after it. Recomputing it
+     afterwards would let the queue move underneath the question that was
+     already asked about it. */
+  var subject = nextChatSubject();
+  APP.chat.pendingSubjectIds = subject ? subject.ids.slice() : [];
+
   APP.chat.history.push({ role: 'user', parts: [{ text: userMessage }] });
   APP.chat.lastTurnMessage = userMessage;      // so the retry button can repeat this turn
   setStatus(H('שלב 3: מנסח שאלה...'), true);
@@ -10957,25 +11076,47 @@ async function askQuestionTurn(userMessage) {
 
   APP.chat.asked++;
   APP.chat.pendingQuestion = String(obj.question).trim();
-  APP.chat.pendingReqId = reqById(obj.req_id) ? String(obj.req_id) : '';
-  /* A merged question answers for more than one requirement, and if only the
-     primary id travelled onward then the other two would look unasked to every
-     stage downstream: the writing stage would not know the answer was meant to
-     serve them, and the queue panel would show them still open. Both ids
-     survive, deduplicated, with the primary one first. */
-  var covered = Array.isArray(obj.req_ids) ? obj.req_ids : [];
-  var seenReq = {}, reqIds = [];
-  [obj.req_id].concat(covered).forEach(function (id) {
-    var key = String(id || '').trim();
-    if (!key || seenReq[key] || !reqById(key)) return;
-    seenReq[key] = 1;
-    reqIds.push(key);
-  });
+
+  /* v39.15. THE IDS COME FROM THE APP, NOT FROM THE REPLY.
+
+     They used to be read off obj.req_id and obj.req_ids, which made the model
+     the authority on what its own question had been about. A merged question
+     that came back naming one id closed one gap and left its siblings looking
+     unasked; a question that named an id it had drifted onto closed the wrong
+     gap entirely. The subject was decided before the call was made, and that
+     decision is what travels onward now.
+
+     The reply is still allowed one thing: if the model named an id that is IN
+     the chosen subject, it may reorder which of them is primary, because it is
+     the one that knows which of the three its sentence leads with. It may not
+     add an id, and it may not remove one. */
+  var chosen = APP.chat.pendingSubjectIds && APP.chat.pendingSubjectIds.length
+    ? APP.chat.pendingSubjectIds.slice()
+    : [];
+  if (!chosen.length) {
+    /* No subject was chosen, which happens only on the closing question and on
+       a queue that emptied mid turn. The reply is then the only source, and it
+       is filtered to ids that actually exist. */
+    var seenReq = {};
+    [obj.req_id].concat(Array.isArray(obj.req_ids) ? obj.req_ids : []).forEach(function (id) {
+      var key = String(id || '').trim();
+      if (!key || seenReq[key] || !reqById(key)) return;
+      seenReq[key] = 1;
+      chosen.push(key);
+    });
+  } else {
+    var lead = String(obj.req_id || '').trim();
+    if (lead && chosen.indexOf(lead) > 0) {
+      chosen = [lead].concat(chosen.filter(function (id) { return id !== lead; }));
+    }
+  }
+  var reqIds = chosen;
   APP.chat.pendingReqIds = reqIds;
-  if (!APP.chat.pendingReqId && reqIds.length) APP.chat.pendingReqId = reqIds[0];
+  APP.chat.pendingReqId = reqIds.length ? reqIds[0] : '';
   APP.chat.turns.push({
     role: 'model', text: APP.chat.pendingQuestion,
-    lang: APP.chat.lang, reqId: APP.chat.pendingReqId, reqIds: reqIds
+    lang: APP.chat.lang, reqId: APP.chat.pendingReqId, reqIds: reqIds,
+    payoff: ttQuestionPayoff(reqIds)
   });
   renderChat();
 }
@@ -11331,6 +11472,50 @@ function openGapNoticeText() {
   };
 }
 
+/* v39.15. WHAT ANSWERING THIS IS WORTH, SAID BEFORE IT IS ANSWERED.
+
+   People abandon a conversation when they cannot see what it is buying them,
+   and this one asks for effort up front and pays out two screens later. The
+   arithmetic to answer "what does this question get me" already exists and is
+   the same arithmetic the score runs on: price the requirement as it stands,
+   price it as proved, and the difference is the payoff.
+
+   Stated as a level when a level would move, because that is the number on the
+   screen the candidate is looking at, and as a share of the gap otherwise.
+   Never as a promise: the wording is what CAN change, and the second reading is
+   still taken from the finished document, not from the fact that a question was
+   answered. */
+function ttQuestionPayoff(reqIds) {
+  try {
+    if (!APP.signals || !APP.coverage || !APP.coverage.length) return '';
+    var ids = {};
+    (reqIds || []).forEach(function (id) { if (id) ids[String(id)] = 1; });
+    if (!Object.keys(ids).length) return '';
+    var before = matchVerdict();
+    if (!before) return '';
+    /* A copy of the coverage table with these requirements proved, measured
+       through the same verdict function. Nothing is written back. */
+    var saved = APP.coverage;
+    APP.coverage = saved.map(function (c) {
+      if (!ids[String(c.req_id)]) return c;
+      var copy = {};
+      Object.keys(c).forEach(function (k) { copy[k] = c[k]; });
+      copy.status = 'direct';
+      return copy;
+    });
+    var after = null;
+    try { after = matchVerdict(); } finally { APP.coverage = saved; }
+    if (!after) return '';
+    if (after.level > before.level) {
+      return H('תשובה כאן יכולה להעלות את ההתאמה מ') + ttLevelName(before.level) +
+             H(' ל') + ttLevelName(after.level) + '.';
+    }
+    var gain = Math.round((after.score || 0) - (before.score || 0));
+    if (gain >= 2) return H('תשובה כאן שווה כ־') + gain + H(' נקודות התאמה.');
+    return '';
+  } catch (e) { return ''; }
+}
+
 function renderOpenGapNotice() {
   var el = $('openGapNotice');
   if (!el) return;
@@ -11680,7 +11865,10 @@ function renderChat() {
         '<div dir="' + dir + '" class="' + align +
         ' bg-white border border-slate-200 rounded-lg p-2 max-w-[85%]">' +
         (r ? '<div class="text-[10px] text-slate-400 mb-0.5">' + escapeHtml(r.id + ' · ' + r.text) + '</div>' : '') +
-        escapeHtml(t.text) + '</div>', 'tt-bubble-q');
+        escapeHtml(t.text) +
+        /* v39.15. The reason to answer, next to the question that is asking. */
+        (t.payoff ? '<div class="text-[11px] text-emerald-800 mt-1 font-medium">↑ ' + escapeHtml(t.payoff) + '</div>' : '') +
+        '</div>', 'tt-bubble-q');
     } else {
       // opposite the question it answers, which is decided by the question's
       // language and not by the language the answer happens to be typed in
@@ -20126,6 +20314,10 @@ function ttFlagSvg(code, size) {
 var TT_TX_ORDER = ['ar', 'en', 'fr', 'es', 'de', 'it', 'pt', 'hr', 'ru', 'ja', 'hi'];
 var TT_TX_IDX = {}; TT_TX_ORDER.forEach(function (c, i) { TT_TX_IDX[c] = i; });
 var TT_TX = {
+'תשובה כאן יכולה להעלות את ההתאמה מ':['إجابة هنا قد ترفع المطابقة من ','Answering here could lift the match from ','Répondre ici pourrait faire passer l\'adéquation de ','Responder aquí podría subir la coincidencia de ','Eine Antwort hier könnte die Passung von ','Rispondere qui potrebbe portare la corrispondenza da ','Responder aqui pode elevar a adequação de ','Odgovor ovdje mogao bi podići podudarnost s ','Ответ здесь может поднять соответствие с ','ここに答えると、適合が','यहाँ उत्तर देने से मिलान '],
+' ל':[' إلى ',' to ',' à ',' a ',' auf ',' a ',' para ',' na ',' до ','から',': से '],
+'תשובה כאן שווה כ־':['إجابة هنا تساوي نحو ','Answering here is worth about ','Répondre ici vaut environ ','Responder aquí vale unos ','Eine Antwort hier ist etwa ','Rispondere qui vale circa ','Responder aqui vale cerca de ','Odgovor ovdje vrijedi otprilike ','Ответ здесь стоит примерно ','ここに答えると、およそ ','यहाँ उत्तर देना लगभग '],
+' נקודות התאמה.':[' نقطة مطابقة.',' match points.',' points d\'adéquation.',' puntos de coincidencia.',' Passungspunkte wert.',' punti di corrispondenza.',' pontos de adequação.',' bodova podudarnosti.',' баллов соответствия.','ポイントの適合に相当します。',' मिलान अंक के बराबर है।'],
 'אין פערים פתוחים שאפשר לסגור בשיחה.':['لا توجد فجوات مفتوحة يمكن إغلاقها في المحادثة.','There are no open gaps left that the conversation could close.','Il ne reste aucun écart ouvert que la conversation pourrait combler.','No quedan brechas abiertas que la conversación pudiera cerrar.','Es sind keine offenen Lücken übrig, die das Gespräch schließen könnte.','Non restano lacune aperte che la conversazione possa colmare.','Não restam lacunas abertas que a conversa pudesse fechar.','Nema više otvorenih nedostataka koje bi razgovor mogao zatvoriti.','Не осталось открытых пробелов, которые мог бы закрыть разговор.','対話で埋められる不足は、もう残っていません。','बातचीत से भरे जा सकने वाले कोई खुले अंतर नहीं बचे।'],
 ' דרישות שעניתָ עליהן שאין לך:':[' متطلبات أجبت بأنها ليست لديك:',' requirements you answered that you do not have:',' exigences pour lesquelles vous avez répondu que vous ne les avez pas :',' requisitos sobre los que respondiste que no los tienes:',' Anforderungen, zu denen Sie geantwortet haben, dass Sie sie nicht haben:',' requisiti per cui hai risposto di non averli:',' requisitos sobre os quais você respondeu que não tem:',' zahtjeva za koje ste odgovorili da ih nemate:',' требований, о которых вы ответили, что их у вас нет:','件の要件について、持っていないと答えました：','आवश्यकताएँ जिनके बारे में आपने कहा कि वे आपके पास नहीं हैं:'],
 'אלה לא פערים פתוחים ואין מה לעשות בהם - השיחה שאלה, ואתה ענית. הם נספרים בציון ההתאמה כדרישות שלא הוכחו, וזה נכון וישר. אם טעית באחת מהן, אפשר לערוך את התשובה למטה.':['هذه ليست فجوات مفتوحة ولا شيء يُفعل بشأنها — المحادثة سألت، وأنت أجبت. تُحتسب في درجة المطابقة كمتطلبات لم تُثبَت، وهذا صحيح ونزيه. إذا أخطأت في إحداها، يمكنك تعديل الإجابة أدناه.','These are not open gaps and there is nothing to do about them — the conversation asked, and you answered. They are counted in the fit score as unproven requirements, which is correct and honest. If you got one of them wrong, you can edit the answer below.','Ce ne sont pas des écarts ouverts et il n\'y a rien à y faire : la conversation a demandé, vous avez répondu. Ils sont comptés dans le score d\'adéquation comme des exigences non démontrées, ce qui est exact et honnête. Si vous vous êtes trompé sur l\'une d\'elles, vous pouvez modifier la réponse ci-dessous.','Estas no son brechas abiertas y no hay nada que hacer con ellas: la conversación preguntó y tú respondiste. Se cuentan en la puntuación de ajuste como requisitos no demostrados, lo cual es correcto y honesto. Si te equivocaste en alguna, puedes editar la respuesta abajo.','Das sind keine offenen Lücken, und es ist nichts daran zu tun — das Gespräch hat gefragt, und Sie haben geantwortet. Sie zählen im Passungswert als nicht belegte Anforderungen, was richtig und ehrlich ist. Haben Sie sich bei einer geirrt, können Sie die Antwort unten bearbeiten.','Queste non sono lacune aperte e non c\'è nulla da fare al riguardo: la conversazione ha chiesto e tu hai risposto. Sono contate nel punteggio di corrispondenza come requisiti non dimostrati, il che è corretto e onesto. Se hai sbagliato su una di esse, puoi modificare la risposta qui sotto.','Estas não são lacunas abertas e não há nada a fazer sobre elas — a conversa perguntou e você respondeu. São contadas na pontuação de adequação como requisitos não comprovados, o que é correto e honesto. Se você errou em alguma, pode editar a resposta abaixo.','Ovo nisu otvoreni nedostaci i s njima se nema što učiniti — razgovor je pitao, a vi ste odgovorili. Broje se u rezultatu podudarnosti kao nedokazani zahtjevi, što je točno i pošteno. Ako ste se u nečemu prevarili, odgovor možete urediti ispod.','Это не открытые пробелы, и с ними ничего не сделать: разговор спросил, вы ответили. В оценке соответствия они учитываются как недоказанные требования — это верно и честно. Если в чём-то вы ошиблись, ответ можно изменить ниже.','これらは開いた不足ではなく、手の打ちようもありません。対話が尋ね、あなたが答えました。適合スコアでは、証明されていない要件として数えられます。それが正確で誠実な扱いです。どれか答えを誤っていたなら、下で編集できます。','ये खुले अंतर नहीं हैं और इनके बारे में कुछ किया नहीं जा सकता — बातचीत ने पूछा, और आपने उत्तर दिया। ये मिलान अंक में असिद्ध आवश्यकताओं के रूप में गिने जाते हैं, जो सही और ईमानदार है। यदि किसी में आपसे भूल हुई हो, तो नीचे उत्तर संपादित कर सकते हैं।'],
