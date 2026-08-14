@@ -2556,7 +2556,7 @@
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.19';
+var TT_VERSION = 'v39.20';
 
 var APP = {
   apiKey: '',
@@ -7035,6 +7035,11 @@ function promptSynthesis(cat, sectionText, signals, coverage, qa, uiHint) {
     '',
     '    RESTRAINT THREE: IN THE LANGUAGE OF THE RESUME. Each of these has a real equivalent that practitioners in that language actually use, and that equivalent is what goes in. Dropping the English term into a Hebrew or Spanish bullet is not precision, it is a translation seam - unless the field genuinely uses the English term untranslated, which for SLA, RCA and SAP it does, and for "workflow optimisation" it does not.',
     '',
+    '',
+    'D13. NUMBERS ARE WRITTEN AS DIGITS. A scan reaches a digit before it reaches a word, and a figure spelled out in letters disappears into the sentence around it. \u05e2\u05e9\u05e8\u05d9\u05dd \u05d0\u05d7\u05d5\u05d6 becomes 20%, \u05e9\u05e0\u05d9\u05dd \u05e2\u05e9\u05e8 \u05e2\u05d5\u05d1\u05d3\u05d9\u05dd becomes 12 \u05e2\u05d5\u05d1\u05d3\u05d9\u05dd, "twenty percent" becomes "20%", "over ten sites" becomes "10+ sites", "three years" becomes "3 years".',
+    '    THIS CHANGES THE NOTATION AND NEVER THE VALUE. \u05e2\u05e9\u05e8\u05d5\u05ea \u05e1\u05e4\u05e7\u05d9\u05dd does not become 40 \u05e1\u05e4\u05e7\u05d9\u05dd, and "several plants" does not become "5 plants": a vague quantity stays vague, because turning it into a figure is inventing the figure. Only a number the file already states in words is rewritten as a numeral.',
+    '    Small counts inside ordinary prose stay in words where a numeral would read as odd - "two of the three sites" is fine. The rule is about figures that carry weight: headcounts, percentages, budgets, durations, volumes.',
+    '',
     '    THE TEST FOR A FINISHED LINE: would this person say it out loud, in these words, in an interview, without sounding like they were quoting a brochure. If not, it is wrong in one of the two directions - too flat or too inflated - and both cost the same interview.',
     '',
     'D10. WORDS THAT COST AND RETURN NOTHING. Strip them when you rewrite a line, in every language: \u05d1\u05db\u05d3\u05d9, \u05e2\u05dc \u05de\u05e0\u05ea, \u05d1\u05de\u05e1\u05d2\u05e8\u05ea \u05d4\u05ea\u05e4\u05e7\u05d9\u05d3, \u05d4\u05d9\u05d4 \u05e2\u05dc\u05d9, \u05de\u05d3\u05d5\u05d1\u05e8 \u05d1, in order to, so as to, was tasked with, had the opportunity to. Every one of them is a word the reader pays for and gets nothing back.',
@@ -8129,8 +8134,9 @@ function summaryBrief(doc) {
   var form = shape.format === 'bullets' || (!shape.exists && want === 'bullets')
     ? ['SHAPE: BULLETS. BETWEEN FOUR AND SIX of them, one line each, each carrying one thing this posting screens for.',
        'THE NUMBER IS DECIDED BY THIS POSTING AND BY NOTHING ELSE. Four is the floor, six is the ceiling, and neither one is a target to reach. If four bullets already cover everything this posting screens for and this file proves, write four and stop: a fifth added to fill out the list weakens the four above it. If this posting screens for six separate things and the file proves all six, write six and do not drop one to look shorter. The only bullet that is never allowed is the one that survived because the list looked thin.']
-    : ['SHAPE: ONE PARAGRAPH. FOUR TO SIX LINES. Not a list of nouns and not a mission statement: who this person is professionally, what they have run, and why that answers this posting.',
-       'THE NUMBER IS DECIDED BY THIS POSTING AND BY NOTHING ELSE. Four is the floor, six is the ceiling, and neither one is a target to reach. The fifth and sixth lines are written only when each carries something from the top of the priority list that the earlier ones could not hold. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.'];
+    : ['SHAPE: ONE PARAGRAPH. THREE TO FOUR LINES. Not a list of nouns and not a mission statement: who this person is professionally, what they have run, and why that answers this posting.',
+       'THE NUMBER IS DECIDED BY THIS POSTING AND BY NOTHING ELSE. Three is the floor, four is the ceiling, and neither one is a target to reach. A fourth line is written only when it carries something from the top of the priority list that the first three could not hold. This is the part of the page a reader decides on in seconds, and every line that is not doing work is spending that decision on nothing.',
+       'NO PRONOUN. Write "\u05e0\u05d9\u05d4\u05dc\u05ea\u05d9 \u05ea\u05e4\u05e2\u05d5\u05dc 12 \u05e9\u05e0\u05d4", not "\u05d0\u05e0\u05d9 \u05e0\u05d9\u05d4\u05dc\u05ea\u05d9"; "Managed operations for 12 years", not "I managed". In Hebrew, Arabic, Spanish, Italian, Portuguese and Russian the verb already carries the person and the pronoun is redundant - dropping it is all this rule asks. IT DOES NOT MEAN GOING BACK TO A NOUN PHRASE: \u05e0\u05d9\u05d4\u05d5\u05dc \u05ea\u05e4\u05e2\u05d5\u05dc and "operations management" are exactly the passive opening D6b exists to remove, and they are not what dropping the pronoun means.'];
 
   /* ---------- HOW IT IS WRITTEN, v39.7 ----------
      The rules above say what the summary is made of. These say how it reads,
@@ -13551,6 +13557,71 @@ function collectSkillChanges(obj) {
 }
 
 /* ---------------- compile the approved set ---------------- */
+/* =========================================================================
+   ONE DATE STYLE ACROSS THE PAGE                                    v39.20
+
+   Asked for as part of the phrasing brief, and it cannot be done there. Rule G
+   tells the writing stage that company, role and date lines are context and
+   forbids it from ever returning them - so no instruction about date formats
+   can reach the lines that carry the dates. It has to be done here, in code,
+   or not at all.
+
+   Deliberately the narrowest thing that answers the request:
+
+     - THE SEPARATOR ONLY. 2020-2024, 2020 - 2024, 2020 – 2024 and 2020—2024 are
+       one range written four ways, and mixing them on one page is the kind of
+       untidiness a reader notices without being able to say why. The digits are
+       never touched, the words are never touched, the order is never touched.
+     - ONLY WHEN THE PAGE IS ALREADY INCONSISTENT. A resume that uses one style
+       throughout keeps it, whichever it is - including a style this code would
+       not have chosen. The candidate's own consistent choice is not an error.
+     - THE MAJORITY STYLE WINS, so the smallest number of lines change.
+
+   What it will not do is reformat a date, reorder a range, expand a month name
+   or convert between calendars. Every one of those risks changing a fact in a
+   document somebody sends to an employer, and none of them was asked for. */
+var TT_DATE_RANGE_RE = /(\d{4})\s*([-\u2010\u2011\u2012\u2013\u2014])\s*(\d{4}|\u05d4\u05d9\u05d5\u05dd|present|current|now|actualidad|heute|attuale|\u0627\u0644\u0622\u0646|\u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0435|\u73fe\u5728|\u0905\u092c)/gi;
+
+function ttDateStyleOf(text) {
+  var out = [];
+  var m;
+  TT_DATE_RANGE_RE.lastIndex = 0;
+  while ((m = TT_DATE_RANGE_RE.exec(String(text || ''))) !== null) {
+    var whole = m[0];
+    var sep = m[2];
+    var spaced = /\s/.test(whole.charAt(m[1].length)) ;
+    out.push(sep + (spaced ? ' ' : ''));
+  }
+  return out;
+}
+
+function ttNormalizeDateStyle(doc) {
+  if (!doc || !doc.lines) return { changed: 0, style: '' };
+  var counts = {}, total = 0;
+  doc.lines.forEach(function (l) {
+    ttDateStyleOf(l.text).forEach(function (k) { counts[k] = (counts[k] || 0) + 1; total++; });
+  });
+  var keys = Object.keys(counts);
+  /* Nothing to align: no ranges at all, or every range already written the
+     same way. In both cases the page is left exactly as the candidate wrote
+     it. */
+  if (total < 2 || keys.length < 2) return { changed: 0, style: keys[0] || '' };
+  var winner = keys[0];
+  keys.forEach(function (k) { if (counts[k] > counts[winner]) winner = k; });
+  var sep = winner.charAt(0);
+  var spaced = winner.length > 1;
+  var changed = 0;
+  doc.lines.forEach(function (l) {
+    var before = String(l.text || '');
+    TT_DATE_RANGE_RE.lastIndex = 0;
+    var after = before.replace(TT_DATE_RANGE_RE, function (whole, a, s2, b) {
+      return a + (spaced ? ' ' + sep + ' ' : sep) + b;
+    });
+    if (after !== before) { l.text = after; changed++; }
+  });
+  return { changed: changed, style: winner };
+}
+
 function compileApproved() {
   APP.synthesis = {};
   APP.added = [];
@@ -13559,6 +13630,9 @@ function compileApproved() {
   APP.dropped = {};
   APP.summaryPlan = null;
   APP.newSummary = null;
+  /* Runs on the document every compile, before anything is written out, so all
+     five rendering surfaces see the same text. */
+  try { ttNormalizeDateStyle(APP.doc); } catch (eDate) {}
 
   APP.changes.forEach(function (ch) {
     if (ch.status !== 'approved') return;
