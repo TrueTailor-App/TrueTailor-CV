@@ -123,7 +123,7 @@
      ===================================================================== -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BYKBETZ27W"></script>
 <script>
-var _0xa3e170=_0x1a23;function _0x537a(){var _0x45249c=['config','dataLayer','push','3DbvBBT','1914198MUNnCW','4415910kHYgcq','105HETvdS','1987952XVdrib','135490IzuwWX','1475170TCOuAe','1199730MvkuXw','319192ymWSll','9WBejch'];_0x537a=function(){return _0x45249c;};return _0x537a();}function _0x1a23(_0x3624b2,_0x38c320){_0x3624b2=_0x3624b2-0x193;var _0x537aa9=_0x537a();var _0x1a2306=_0x537aa9[_0x3624b2];return _0x1a2306;}(function(_0x3cd0e2,_0x235c4d){var _0x110b78={_0x1ccc25:0x196,_0x503d0d:0x195},_0x391345=_0x1a23,_0x4dee2e=_0x3cd0e2();while(!![]){try{var _0x55aea3=parseInt(_0x391345(0x197))/0x1+parseInt(_0x391345(0x198))/0x2+-parseInt(_0x391345(0x19f))/0x3*(parseInt(_0x391345(_0x110b78._0x1ccc25))/0x4)+parseInt(_0x391345(0x199))/0x5+-parseInt(_0x391345(0x193))/0x6+parseInt(_0x391345(_0x110b78._0x503d0d))/0x7*(parseInt(_0x391345(0x19a))/0x8)+parseInt(_0x391345(0x19b))/0x9*(-parseInt(_0x391345(0x194))/0xa);if(_0x55aea3===_0x235c4d)break;else _0x4dee2e['push'](_0x4dee2e['shift']());}catch(_0x1c043a){_0x4dee2e['push'](_0x4dee2e['shift']());}}}(_0x537a,0x6ed06),window[_0xa3e170(0x19d)]=window[_0xa3e170(0x19d)]||[]);function gtag(){var _0x53865b=_0xa3e170;dataLayer[_0x53865b(0x19e)](arguments);}gtag('js',new Date()),gtag(_0xa3e170(0x19c),'G-BYKBETZ27W',{'allow_google_signals':![],'allow_ad_personalization_signals':![]});
+function _0x2e30(_0x3cebc4,_0x4c8710){_0x3cebc4=_0x3cebc4-0x1d7;var _0x5030f5=_0x5030();var _0x2e30db=_0x5030f5[_0x3cebc4];return _0x2e30db;}var _0x4f497c=_0x2e30;(function(_0x3e2731,_0x304e9e){var _0x3b005e={_0x3bb8f8:0x1e1,_0x2b405f:0x1db,_0x154555:0x1e3,_0x1a6a90:0x1d7,_0x58bcb1:0x1da},_0x4a9257=_0x2e30,_0x4bbbc8=_0x3e2731();while(!![]){try{var _0x2326d0=parseInt(_0x4a9257(0x1d9))/0x1+-parseInt(_0x4a9257(0x1dd))/0x2+parseInt(_0x4a9257(0x1d8))/0x3*(-parseInt(_0x4a9257(0x1e0))/0x4)+-parseInt(_0x4a9257(_0x3b005e._0x3bb8f8))/0x5*(parseInt(_0x4a9257(_0x3b005e._0x2b405f))/0x6)+parseInt(_0x4a9257(0x1e2))/0x7+parseInt(_0x4a9257(_0x3b005e._0x154555))/0x8+parseInt(_0x4a9257(_0x3b005e._0x1a6a90))/0x9*(parseInt(_0x4a9257(_0x3b005e._0x58bcb1))/0xa);if(_0x2326d0===_0x304e9e)break;else _0x4bbbc8['push'](_0x4bbbc8['shift']());}catch(_0x452a53){_0x4bbbc8['push'](_0x4bbbc8['shift']());}}}(_0x5030,0x92a2d),window[_0x4f497c(0x1dc)]=window[_0x4f497c(0x1dc)]||[]);function gtag(){dataLayer['push'](arguments);}gtag('js',new Date()),gtag(_0x4f497c(0x1df),_0x4f497c(0x1de),{'allow_google_signals':![],'allow_ad_personalization_signals':![]});function _0x5030(){var _0x1c3d90=['dataLayer','1169878hPfLcM','G-BYKBETZ27W','config','775532TnjnmL','5HYSDWu','1905323kgTusP','2532152hWPjya','36zARttm','3AsoDab','791327VYKEDN','2069180dacjmu','4969584fIpGAd'];_0x5030=function(){return _0x1c3d90;};return _0x5030();}
 </script>
 <title>TrueTailor CV — התאמת קורות חיים למשרה</title>
 
@@ -2957,7 +2957,7 @@ var _0xa3e170=_0x1a23;function _0x537a(){var _0x45249c=['config','dataLayer','pu
    friends without a module loader.
    ========================================================================= */
 
-var TT_VERSION = 'v39.36';
+var TT_VERSION = 'v39.38';
 
 var APP = {
   apiKey: '',
@@ -14243,6 +14243,10 @@ function compileApproved() {
   if (ttOnePage() && APP.onePage && APP.onePage.drops) {
     APP.onePage.drops.forEach(function (d) {
       if (d.status !== 'approved') return;
+      /* A trim replaces the text and does not remove the line, so it is
+         written over whatever stage 5 put there. Last writer wins on purpose:
+         this deletion was made FROM that text and is checked against it. */
+      if (d.isTrim) { APP.synthesis[d.lineId] = d.after; return; }
       if (d.lineId) APP.dropped[d.lineId] = 1;
       (d.lineIds || []).forEach(function (id) { APP.dropped[id] = 1; });
     });
@@ -20503,6 +20507,37 @@ function ttLooksLikeDegree(text) {
 /* Which line ids may be OFFERED at all. Everything refused here is refused
    before the model is even told the line exists, so a proposal to remove it
    cannot be made and cannot leak through a later bug. */
+/* What a line says RIGHT NOW.
+
+   Stage 5 rewrites lines, and the rewrite lives in APP.synthesis keyed by the
+   id of the line in APP.doc. So the text on the page is not doc.text, it is
+   this. Everything in the condensing layer reads through here: what the model
+   is shown, what the panel shows, and what a deletion is checked against.
+   Showing the original wording of a line the candidate has already improved
+   would be asking them to approve the removal of something that is not on
+   their page. */
+function ttLineNow(l) {
+  if (!l) return '';
+  var syn = APP.synthesis && APP.synthesis[l.id];
+  return String(syn != null ? syn : l.text || '');
+}
+
+/* v39.37. THE IDS COME FROM APP.doc AND FROM NOTHING ELSE.
+
+   The first version of this parsed APP.finalText and handed the resulting ids
+   to compileApproved, which resolves them against APP.doc. Line ids are
+   positional — 'L' + a counter — so the two agree only while the compiled
+   text has exactly the same lines in exactly the same order as the original.
+   That is true before any tailoring and false the moment stage 5 adds or
+   removes a line, and after that every id is off by the number of lines that
+   moved: approving a removal would have deleted a DIFFERENT line, silently,
+   and the candidate would have had no way to tell which.
+
+   It never reached anyone: it was caught while designing the next change, and
+   the test that hid it had APP.doc and APP.finalText identical, which is the
+   one case where the bug cannot appear. Both are now the same document, and
+   lines already dropped by an approved stage 5 change are skipped, because
+   proposing to remove something that is not on the page is noise. */
 function ttOnePageOfferable(doc) {
   var out = {};
   if (!doc || !doc.lines) return out;
@@ -20515,9 +20550,50 @@ function ttOnePageOfferable(doc) {
     (c && c.evidence_ids || []).forEach(function (id) { proof[id] = (proof[id] || 0) + 1; });
   });
 
+  /* v39.38. THE SECOND GUARD, AND IT COVERS WHAT THE FIRST ONE MISSES.
+
+     The coverage map cites the lines that PROVE a requirement. It does not
+     cite every line that carries a word the posting screens for, and those
+     are not the same set: a term can sit in a line the model never cited as
+     evidence, and if that is the only place the term appears in the whole
+     document, removing the line takes the term out of the resume entirely.
+     A screening system does not read the coverage map. It reads words.
+
+     So a line holding the LAST occurrence of a keyword the posting must have,
+     or of a critical one, is not offered at all. Terms that appear in two or
+     more lines are left alone: removing one copy costs nothing, and treating
+     every keyword as untouchable would protect most of the document and make
+     the feature unable to do its job.
+
+     Wrapped, because it depends on stage 1 having produced keywords. On a run
+     where it did not, this guard simply does not apply and the evidence guard
+     above still stands. */
+  var lastCarrier = {};
+  try {
+    var terms = (typeof allKeywords === 'function' ? allKeywords() : []).filter(function (t) {
+      return t && (t.must || t.tier === 'critical');
+    });
+    if (terms.length) {
+      var carriers = {};
+      doc.lines.forEach(function (l) {
+        if (!l || l.isHeading || (APP.dropped && APP.dropped[l.id])) return;
+        var hay = normalizeToken(ttLineNow(l));
+        if (!hay) return;
+        terms.forEach(function (t) {
+          if (!containsTerm(hay, t.term)) return;
+          (carriers[t.norm] = carriers[t.norm] || []).push(l.id);
+        });
+      });
+      Object.keys(carriers).forEach(function (k) {
+        if (carriers[k].length === 1) lastCarrier[carriers[k][0]] = k;
+      });
+    }
+  } catch (e) { /* no keywords, no guard */ }
+
   doc.lines.forEach(function (l) {
     if (!l || l.isHeading || l.type === 'blank') return;
-    if (!String(l.text || '').trim()) return;
+    if (!String(ttLineNow(l)).trim()) return;
+    if (APP.dropped && APP.dropped[l.id]) return;      // already gone from the page
     if (TT_ONEPAGE_UNTOUCHABLE[l.cat]) return;
     /* A line the parser reads as structure is a role header inside the
        experience section and must not be offered there. Outside it, the same
@@ -20527,10 +20603,11 @@ function ttOnePageOfferable(doc) {
        go. */
     if (l.structKind && l.cat === 'experience') return;
     if (proof[l.id]) return;                         // cited evidence, in any section
-    if (l.cat === 'education' && ttLooksLikeDegree(l.text)) return;
+    if (lastCarrier[l.id]) return;                   // the only place a screened term appears
+    if (l.cat === 'education' && ttLooksLikeDegree(ttLineNow(l))) return;
     if (l.cat === 'experience') {
       if (!l.editable) return;
-      if (lineHasNumber(l.text)) return;             // a measured result is never surplus
+      if (lineHasNumber(ttLineNow(l))) return;        // a measured result is never surplus
     }
     out[l.id] = l.cat;
   });
@@ -20594,7 +20671,8 @@ function ttOnePageOfferableRoles(doc) {
       var id = block.lineIds[n];
       var line = lineById(doc, id);
       if (evidence[id]) return;
-      if (line && lineHasNumber(line.text)) return;
+      if (APP.dropped && APP.dropped[id]) continue;    // already gone; not a reason to protect
+      if (line && lineHasNumber(ttLineNow(line))) return;
     }
     if (typeof removalLeavesGap === 'function' && removalLeavesGap(doc, block.id)) return;
 
@@ -20603,11 +20681,59 @@ function ttOnePageOfferableRoles(doc) {
   return out;
 }
 
+/* v39.37. DELETION INSIDE A LINE, AND HOW IT STAYS DELETION.
+
+   "Remove only" was the rule, and it left a real gap: a skills list written on
+   one line can only be kept whole or deleted whole, and deleting it takes the
+   section with it. But dropping "cooking, surfing" from the end of that list
+   is not rewriting. Every word left behind is a word that was already there,
+   in the order it was already in. So the operation is allowed and the rule is
+   unchanged — as long as that claim is CHECKED rather than trusted.
+
+   This is the check, and it counts WORDS and not characters.
+
+   A character level subsequence test was written first and it was wrong in a
+   way worth recording: "Pyton" is a subsequence of "Python". Deleting letters
+   from inside a word passes a character test and is not a deletion of
+   content, it is a typo the app would then have introduced into a document
+   somebody sends to an employer. So the unit is the word: every word of the
+   result must be a whole word of the original, in the original order.
+
+   Punctuation is stripped from both ends of each word before comparing,
+   because dropping the trailing comma of a list that just lost its last item
+   is a consequence of the deletion rather than a change to a word.
+
+   A model that invents a word, corrects a spelling, reorders two items or
+   merges two phrases fails here, and its proposal is discarded before the
+   candidate ever sees it. The result must also be genuinely shorter and must
+   not be empty: an empty result is a line removal wearing a different hat,
+   and line removals have their own fences. */
+function ttNorm(t) {
+  return String(t == null ? '' : t).replace(/\s+/g, ' ').trim();
+}
+
+function ttWordCores(t) {
+  return ttNorm(t).split(' ').map(function (w) {
+    return w.replace(/^[\s,.;:!?·•\-–—()\[\]"'`]+/, '').replace(/[\s,.;:!?·•\-–—()\[\]"'`]+$/, '');
+  }).filter(Boolean);
+}
+
+function ttIsDeletionOf(after, before) {
+  var a = ttNorm(after), b = ttNorm(before);
+  if (!a || !b) return false;
+  if (a.length >= b.length) return false;
+  var wa = ttWordCores(a), wb = ttWordCores(b);
+  if (!wa.length || wa.length >= wb.length) return false;
+  var i = 0;
+  for (var j = 0; j < wb.length && i < wa.length; j++) if (wa[i] === wb[j]) i++;
+  return i === wa.length;
+}
+
 function ttOnePagePrompt(doc, offerable, need, roles) {
   var byCat = {};
   doc.lines.forEach(function (l) {
     if (!offerable[l.id]) return;
-    (byCat[l.cat] = byCat[l.cat] || []).push('  ' + l.id + ' :: ' + String(l.text).replace(/\s+/g, ' ').slice(0, 220));
+    (byCat[l.cat] = byCat[l.cat] || []).push('  ' + l.id + ' :: ' + ttLineNow(l).replace(/\s+/g, ' ').slice(0, 220));
   });
 
   var reqs = (APP.signals && APP.signals.requirements || []).map(function (r) {
@@ -20639,12 +20765,19 @@ function ttOnePagePrompt(doc, offerable, need, roles) {
     (Object.keys(roles || {}).length
       ? 'WHOLE ROLES YOU MAY REMOVE INSTEAD. Each of these is older than ' + TT_ONEPAGE_YEARS +
         ' years and finished. Removing one frees every line in it at once, which is often the only way a short old role can give anything back:\n' +
-        Object.keys(roles).map(function (bid) { return '  ' + bid + ' :: ' + String(roles[bid].head.text).replace(/\s+/g, ' ').slice(0, 160); }).join('\n')
+        Object.keys(roles).map(function (bid) { return '  ' + bid + ' :: ' + ttLineNow(roles[bid].head).replace(/\s+/g, ' ').slice(0, 160); }).join('\n')
       : ''),
+    '',
+    'THIRD OPTION, and often the best one: SHORTEN A LINE BY DELETING PART OF IT.',
+    'A skills list carrying six items when the posting names two, or a bullet whose second half serves nothing here, does not have to be removed whole.',
+    'Return the line with the surplus part deleted. DELETION ONLY: every character you return must already appear in the original line, in the same order.',
+    'Do not rephrase, do not reorder, do not fix spelling, do not join two phrases. If you cannot shorten it by deleting alone, do not return it at all.',
+    'This is checked mechanically and a returned line that is not a pure deletion of the original is discarded.',
     '',
     'Return JSON only, no commentary:',
     '{"drop":[{"id":"L12","why":"one short sentence in Hebrew saying why this line is not needed for THIS posting"}],' +
-      '"drop_roles":[{"blockId":"B3","why":"one short sentence in Hebrew"}]}',
+      '"drop_roles":[{"blockId":"B3","why":"one short sentence in Hebrew"}],' +
+      '"trim":[{"id":"L20","after":"the same line with the surplus deleted","why":"one short sentence in Hebrew"}]}',
     'Order each array by how safe the removal is, safest first. Do not exceed ' + (need + 4) + ' line entries.'
   ].join('\n');
 }
@@ -20666,17 +20799,67 @@ function ttOnePageCollectRoles(doc, items, roles) {
     if (!r) return;
     var body = r.block.lineIds.map(function (id) {
       var l = lineById(doc, id);
-      return l ? l.text : '';
+      return l ? ttLineNow(l) : '';
     }).filter(Boolean);
     out.push({
       id: uid('op'),
       lineIds: r.block.lineIds.slice().concat([r.head.id]),
       cat: 'experience',
       isRole: true,
-      before: r.head.text + (body.length ? '\n' + body.join('\n') : ''),
+      before: ttLineNow(r.head) + (body.length ? '\n' + body.join('\n') : ''),
       lang: r.head.lang,
       why: String(it.why || '').trim() ||
            H('התפקיד הזה הסתיים לפני שנים ולא נמצאה בו זיקה לדרישות המשרה.'),
+      status: 'pending'
+    });
+  });
+  return out;
+}
+
+/* Trims are collected on their own and are not subject to the section floor:
+   a shortened line is still a line, so nothing can be emptied by one. What
+   they are subject to is the deletion check, and to not colliding with a
+   removal of the same line. */
+function ttOnePageCollectTrims(doc, items, offerable, alreadyDropped) {
+  var out = [];
+  (items || []).forEach(function (it) {
+    if (!it || !it.id || it.after == null) return;
+    if (!offerable[it.id]) return;
+    if (alreadyDropped[it.id]) return;
+    var l = lineById(doc, it.id);
+    if (!l) return;
+    var before = ttLineNow(l);
+    if (!ttIsDeletionOf(it.after, before)) return;
+    /* v39.38. A trim can do by deletion what a removal is forbidden to do:
+       cut the half of the line that held the keyword. Checked on the result
+       rather than on the line, because here the question is what survives. */
+    try {
+      var kept = normalizeToken(it.after);
+      var lost = (typeof allKeywords === 'function' ? allKeywords() : []).filter(function (t) {
+        return t && (t.must || t.tier === 'critical') &&
+               containsTerm(normalizeToken(before), t.term) && !containsTerm(kept, t.term);
+      });
+      if (lost.length) {
+        /* Only a problem if the term has nowhere else to live. */
+        var elsewhere = normalizeToken((APP.doc.lines || []).filter(function (x) {
+          return x.id !== l.id && !(APP.dropped && APP.dropped[x.id]) && !x.isHeading;
+        }).map(ttLineNow).join(' '));
+        for (var q = 0; q < lost.length; q++) if (!containsTerm(elsewhere, lost[q].term)) return;
+      }
+    } catch (e) { /* no keywords, no guard */ }
+    /* A trim that saves a few characters is not worth a decision. It has to
+       plausibly buy back a line, so it must lose at least a quarter of what
+       was there. */
+    if (ttNorm(it.after).length > ttNorm(before).length * 0.75) return;
+    out.push({
+      id: uid('op'),
+      lineId: l.id,
+      cat: offerable[it.id],
+      isTrim: true,
+      before: before,
+      after: ttNorm(it.after),
+      lang: l.lang,
+      why: String(it.why || '').trim() || H('החלק שהוסר אינו משרת את המשרה הזו.'),
       status: 'pending'
     });
   });
@@ -20740,7 +20923,7 @@ function ttOnePageCollect(doc, items, offerable) {
       id: uid('op'),
       lineId: l.id,
       cat: cat,
-      before: l.text,
+      before: ttLineNow(l),
       lang: l.lang,
       why: String(it.why || '').trim() || H('לא נמצאה בשורה הזו זיקה לדרישות המשרה.'),
       /* Off, like every other removal this app can propose. */
@@ -20750,14 +20933,54 @@ function ttOnePageCollect(doc, items, offerable) {
   return out;
 }
 
+/* ---------------- what the condensing cost, measured ----------------
+
+   This is the question the whole feature turns on and the one the first
+   version did not answer: a shorter resume is easy to produce and worthless
+   if it is a worse match. The app already measures a resume against a posting
+   for a living, so it can answer instead of reassuring.
+
+   Deterministic and free. No second call to the model: the keyword report is
+   a function of the text, and the evidence check is a set comparison against
+   the coverage map that stage 2 already produced. A re-measurement through
+   the model would be slower, cost a call, and vary between two runs on the
+   same document, which is exactly the kind of number this app refuses to put
+   on screen.
+
+   Two figures, because they fail differently. Keyword coverage is what a
+   screening system reads. Cited evidence is what the fit score was built out
+   of, and losing a line that was the proof of a requirement is the one
+   removal that provably lowers the score. By construction it cannot happen —
+   cited lines are never offered — so this reports a fact rather than a risk,
+   and a fact worth showing precisely because it is easy to doubt. */
+function ttOnePageMeasure() {
+  var text = APP.finalText || '';
+  var kw = 0;
+  try { kw = (keywordReport(text) || {}).pct || 0; } catch (e) {}
+
+  /* Requirements whose cited evidence still stands on the page. */
+  var alive = 0, total = 0;
+  (APP.coverage || []).forEach(function (c) {
+    var ids = (c && c.evidence_ids) || [];
+    if (!ids.length) return;
+    total++;
+    var any = ids.some(function (id) { return !(APP.dropped && APP.dropped[id]); });
+    if (any) alive++;
+  });
+  return { kw: kw, alive: alive, total: total, pages: APP.fitPages || 1 };
+}
+
 async function ttOnePageRun() {
   if (!APP.finalText) return;
   if (!requireKeyOrOnboard()) return;
 
-  var doc = parseResume(APP.finalText);
+  /* APP.doc, not the compiled text. See ttOnePageOfferable. */
+  var doc = APP.doc;
+  if (!doc || !doc.lines) return;
   var need = ttOnePageDeficit();
   if (!need) {
-    APP.onePage = { drops: [], ran: true };
+    APP.onePage = APP.onePage || { drops: [], base: ttOnePageMeasure() };
+    APP.onePage.ran = true;
     renderOnePagePanel();
     return;
   }
@@ -20765,7 +20988,8 @@ async function ttOnePageRun() {
   var offerable = ttOnePageOfferable(doc);
   var roles = ttOnePageOfferableRoles(doc);
   if (!Object.keys(offerable).length && !Object.keys(roles).length) {
-    APP.onePage = { drops: [], ran: true, nothing: true };
+    APP.onePage = APP.onePage || { drops: [], base: ttOnePageMeasure() };
+    APP.onePage.ran = true; APP.onePage.nothing = true;
     renderOnePagePanel();
     return;
   }
@@ -20779,10 +21003,24 @@ async function ttOnePageRun() {
     /* Whole roles first in the list, because approving one of those can make
        several line removals unnecessary, and the candidate should see the
        large choice before spending attention on the small ones. */
+    var lineDrops = ttOnePageCollect(doc, obj.drop, offerable);
+    var dropped = {};
+    lineDrops.forEach(function (d) { dropped[d.lineId] = 1; });
+    var fresh = ttOnePageCollectRoles(doc, obj.drop_roles, roles)
+      .concat(lineDrops)
+      .concat(ttOnePageCollectTrims(doc, obj.trim, offerable, dropped));
+
+    /* A second round keeps what was already approved and adds to it. The
+       approved ones are already applied to the page, so the measurement that
+       decided this round's target has them in it. */
+    var kept = (APP.onePage && APP.onePage.drops || []).filter(function (d) { return d.status === 'approved'; });
     APP.onePage = {
-      drops: ttOnePageCollectRoles(doc, obj.drop_roles, roles)
-        .concat(ttOnePageCollect(doc, obj.drop, offerable)),
-      ran: true, need: need
+      drops: kept.concat(fresh),
+      ran: true, need: need,
+      /* The document as it stood before any of this was approved, so the
+         panel can say what the condensing actually cost rather than guessing. */
+      base: (APP.onePage && APP.onePage.base) || ttOnePageMeasure(),
+      rounds: ((APP.onePage && APP.onePage.rounds) || 0) + 1
     };
     setStatus('');
   } catch (e) {
@@ -20799,6 +21037,16 @@ function ttOnePageClear() {
   APP.onePage = null;
 }
 
+/* Roughly what approving this buys, in lines. A whole role frees its header
+   and every bullet under it; a line frees itself; a trim frees at most one,
+   and only if the line was wrapping, which is why it is stated as "about". */
+function ttOnePageFrees(d) {
+  if (d.isTrim) return 1;
+  var text = String(d.before || '');
+  var n = text.split('\n').filter(function (t) { return t.trim(); }).length;
+  return Math.max(1, n);
+}
+
 function ttOnePageApproved() {
   return (APP.onePage && APP.onePage.drops || []).filter(function (d) { return d.status === 'approved'; });
 }
@@ -20811,6 +21059,8 @@ function renderOnePagePanel() {
   var list = (APP.onePage.drops || []).filter(function (d) { return d.status !== 'approved'; });
   var done = ttOnePageApproved().length;
   var over = (APP.fitPages || 1) > 1.02;
+  var now = ttOnePageMeasure();
+  var base = APP.onePage.base || now;
 
   var h = '<div class="rounded-lg border ' + (over ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50') + ' p-3">';
   h += '<div class="font-semibold text-sm ' + (over ? 'text-red-900' : 'text-slate-700') + '">' +
@@ -20818,12 +21068,37 @@ function renderOnePagePanel() {
          ? H('כדי להיכנס לעמוד אחד עוד צריך להוריד תוכן.')
          : H('המסמך נכנס ל{p}.').replace('{p}', ttPagesWord(true))) + '</div>';
 
+  /* v39.37. What it cost, next to what it bought. Shown from the first
+     approval, because that is the moment the question becomes real. */
+  if (done) {
+    var kwDelta = Math.round(now.kw - base.kw);
+    var lostProof = base.alive - now.alive;
+    h += '<div class="text-xs mt-2 rounded border border-slate-200 bg-white p-2">' +
+      '<b>' + escapeHtml(H('מה זה עלה:')) + '</b> ' +
+      escapeHtml(H('הוסרו {n} פריטים.').replace('{n}', done)) + ' ' +
+      escapeHtml(kwDelta === 0
+        ? H('כיסוי מילות המפתח של המשרה לא השתנה ({k}%).').replace('{k}', Math.round(now.kw))
+        : H('כיסוי מילות המפתח השתנה ב־{d} נקודות, ל־{k}%.').replace('{d}', (kwDelta > 0 ? '+' : '') + kwDelta).replace('{k}', Math.round(now.kw))) +
+      ' ' +
+      escapeHtml(lostProof > 0
+        ? H('{n} דרישות איבדו את השורה שהוכיחה אותן.').replace('{n}', lostProof)
+        : H('אף דרישה לא איבדה את השורה שהוכיחה אותה.')) +
+      '</div>';
+  }
+
   if (!list.length) {
     h += '<div class="text-xs mt-1 ' + (over ? 'text-red-900' : 'text-slate-600') + '">' +
       escapeHtml(over
         ? H('לא נותרו הצעות הסרה שעומדות בכללי הבטיחות. אפשר לערוך שורות ישירות בדף שלמטה, או לחזור לשני עמודים.')
         : (done ? H('כל מה שאישרת הוסר. אפשר לחזור לשני עמודים בכל רגע.') : H('לא היה צורך להסיר דבר.'))) +
       '</div>';
+    /* The loop, and it is the candidate who closes it. Still over the page and
+       out of proposals is exactly the moment to look again, now that the ones
+       already approved are off the page and the target is smaller. */
+    if (over) {
+      h += '<button id="btnOnePageMore" class="tt-btn tt-btn-sm mt-2">' +
+        escapeHtml(H('בקש הצעות נוספות')) + '</button>';
+    }
   } else {
     h += '<div class="text-xs mt-1 ' + (over ? 'text-red-900' : 'text-slate-600') + '">' +
       escapeHtml(H('כל הסרה מוצגת עם הנימוק שלה, ושום דבר לא יורד בלי שתאשר. ההסרות האלה שייכות לגרסת העמוד האחד בלבד, וחזרה לשני עמודים מבטלת את כולן.')) +
@@ -20831,9 +21106,18 @@ function renderOnePagePanel() {
     list.forEach(function (d) {
       h += '<div class="rounded border border-slate-200 bg-white p-2">' +
         '<div class="text-[11px] text-slate-500 mb-1">' +
-          escapeHtml(d.isRole ? H('תפקיד שלם') : (CHANGE_LABEL[d.cat] || d.cat)) + '</div>' +
-        '<div class="text-sm text-slate-500 line-through whitespace-pre-line" dir="' + dirForText(d.before, d.lang) + '">' +
+          escapeHtml(d.isRole ? H('תפקיד שלם') : d.isTrim ? H('קיצור שורה') : (CHANGE_LABEL[d.cat] || d.cat)) +
+          escapeHtml(H(' · משחרר כ־{n} שורות').replace('{n}', ttOnePageFrees(d))) + '</div>' +
+        '<div class="text-sm text-slate-500 ' + (d.isTrim ? '' : 'line-through ') + 'whitespace-pre-line" dir="' +
+          dirForText(d.before, d.lang) + '">' +
           escapeHtml(String(d.before).length > 400 ? String(d.before).slice(0, 400) + '…' : d.before) + '</div>' +
+        /* A trim is the one proposal where the interesting half is what stays,
+           so the result is shown under the original rather than left to be
+           imagined from a strikethrough. */
+        (d.isTrim
+          ? '<div class="text-sm text-slate-800 whitespace-pre-line mt-1" dir="' + dirForText(d.after, d.lang) + '">' +
+            escapeHtml(d.after) + '</div>'
+          : '') +
         (d.why ? '<div class="text-xs text-slate-600 mt-1"><b>' + H('הנימוק:') + '</b> ' + escapeHtml(d.why) + '</div>' : '') +
         '<button class="tt-op text-xs px-2 py-1 rounded border border-red-300 text-red-800 bg-white hover:bg-red-50 mt-2" data-id="' +
           escapeHtml(d.id) + '">' + H('הסר ובנה מחדש') + '</button>' +
@@ -20843,6 +21127,11 @@ function renderOnePagePanel() {
   }
   h += '</div>';
   el.innerHTML = h;
+
+  var more = $('btnOnePageMore');
+  if (more) more.addEventListener('click', function () {
+    ttOnePageRun().then(function () { renderPreview(); });
+  });
 
   var btns = el.querySelectorAll('.tt-op');
   for (var i = 0; i < btns.length; i++) {
@@ -20869,6 +21158,15 @@ function renderPageTargetPicker() {
     escapeHtml(H('היעד כרגע: {p}. המסמך נמשך על כ־{n} עמודים.')
       .replace('{p}', ttPagesWord()).replace('{n}', pages.toFixed(1))) + '</span>';
   html += '</div>';
+
+  /* v39.37. The other half of the sentence. The shrink ladder relaxes on its
+     own the moment there is room, so a removal does not only close a gap, it
+     buys the type size back. Saying so turns the panel from a demand into a
+     trade. */
+  if (one && (APP.fitStep || 0) > 0 && pages <= 1.02) {
+    html += '<div class="text-[11px] text-emerald-700 mt-1">' +
+      escapeHtml(H('המסמך נכנס לעמוד. אם יירדו עוד שורות, הגופן והמרווחים יחזרו לגדול יותר.')) + '</div>';
+  }
 
   /* Said once, when it applies, and not repeated on every press. */
   if (one && ttCareerYears() >= 12) {
@@ -21012,13 +21310,36 @@ function fitPageToLimit(page, tplKey) {
   var usable = TT_CONTENT_MM * mm * TT_PAGE_SAFETY;
   var limit = TT_MARGIN_MM * 2 * mm + usable * ttMaxPages();
 
+  /* v39.38. MEASURED WITHOUT THE FLOOR THE SHEET STANDS ON.
+
+     .tt-page carries min-height:297mm so that an empty sheet still looks like
+     a sheet. scrollHeight honours that minimum, which means the measurement
+     could never return less than about 1.02 pages no matter how short the
+     document was. Against a two page cap nobody noticed: the floor sits far
+     below the line being tested. Against a ONE page target it is the line
+     being tested, and the effect was that a document which genuinely fitted
+     kept reporting that it did not, so the condensing panel asked for removal
+     after removal that could never close a gap that was not there.
+
+     So the minimum is lifted for the length of the measurement and put back
+     immediately. Nothing else changes: the same scrollHeight, the same
+     arithmetic, on a box that is finally allowed to be as short as its
+     contents. */
+  var minH = page.style.minHeight;
+  page.style.minHeight = '0';
+
   var ladder = fitLadder();
   for (var i = 0; i < ladder.length; i++) {
     APP.fitStep = i;
     applyTemplateVars(page, templateByKey(tplKey));
     if (page.scrollHeight <= limit + 1) break;
   }
-  APP.fitPages = Math.max(1, (page.scrollHeight - TT_MARGIN_MM * 2 * mm) / usable);
+  var content = page.scrollHeight;
+  page.style.minHeight = minH;
+
+  /* Still floored at one, because half a page is not half a document: a
+     resume that fills a third of a sheet is one page long. */
+  APP.fitPages = Math.max(1, (content - TT_MARGIN_MM * 2 * mm) / usable);
 }
 
 /* What the shrinking did, said plainly, because a candidate who sees their
@@ -23200,6 +23521,17 @@ var TT_TX = {
 'תפקיד שלם':['وظيفة كاملة','A whole role','Un poste entier','Un puesto completo','Eine ganze Position','Un intero ruolo','Um cargo inteiro','Cijelo radno mjesto','Целая должность','職歴ひとつ全体','पूरा एक पद'],
 'לא נמצאה בשורה הזו זיקה לדרישות המשרה.':['لم تُوجد في هذا السطر صلة بمتطلبات الوظيفة.','No link was found between this line and the posting\'s requirements.','Aucun lien n\'a été trouvé entre cette ligne et les exigences de l\'annonce.','No se encontró relación entre esta línea y los requisitos de la oferta.','Zwischen dieser Zeile und den Anforderungen der Stelle wurde kein Bezug gefunden.','Non è stato trovato alcun legame tra questa riga e i requisiti dell\'annuncio.','Não foi encontrada ligação entre esta linha e os requisitos da vaga.','Nije pronađena veza između ovog retka i zahtjeva oglasa.','Связь между этой строкой и требованиями вакансии не найдена.','この行と求人の要件との関係は見つかりませんでした。','इस पंक्ति और पद की आवश्यकताओं के बीच कोई संबंध नहीं मिला।'],
 'התפקיד הזה הסתיים לפני שנים ולא נמצאה בו זיקה לדרישות המשרה.':['انتهت هذه الوظيفة منذ سنوات ولم تُوجد فيها صلة بمتطلبات الوظيفة المطلوبة.','This role ended years ago and no link was found between it and the posting\'s requirements.','Ce poste s\'est terminé il y a des années et aucun lien n\'a été trouvé avec les exigences de l\'annonce.','Este puesto terminó hace años y no se encontró relación con los requisitos de la oferta.','Diese Position endete vor Jahren, und es wurde kein Bezug zu den Anforderungen der Stelle gefunden.','Questo ruolo è terminato anni fa e non è stato trovato alcun legame con i requisiti dell\'annuncio.','Este cargo terminou há anos e não foi encontrada ligação com os requisitos da vaga.','Ovo radno mjesto završilo je prije više godina i nije pronađena veza sa zahtjevima oglasa.','Эта должность завершилась много лет назад, и связи с требованиями вакансии не найдено.','この職歴は何年も前に終わっており、求人の要件との関係は見つかりませんでした。','यह पद वर्षों पहले समाप्त हो गया और पद की आवश्यकताओं से इसका कोई संबंध नहीं मिला।'],
+'החלק שהוסר אינו משרת את המשרה הזו.':['الجزء المحذوف لا يخدم هذه الوظيفة.','The deleted part does not serve this posting.','La partie supprimée ne sert pas cette annonce.','La parte eliminada no sirve para esta oferta.','Der entfernte Teil dient dieser Stelle nicht.','La parte rimossa non serve a questo annuncio.','A parte removida não serve esta vaga.','Uklonjeni dio ne služi ovom oglasu.','Удалённая часть не работает на эту вакансию.','削除した部分は、この求人には役立ちません。','हटाया गया भाग इस पद के काम नहीं आता।'],
+'קיצור שורה':['اختصار سطر','Line shortened','Ligne raccourcie','Línea acortada','Zeile gekürzt','Riga accorciata','Linha encurtada','Skraćeni redak','Строка сокращена','行の短縮','पंक्ति छोटी की'],
+' · משחרר כ־{n} שורות':[' · يوفّر نحو {n} أسطر',' · frees about {n} lines',' · libère environ {n} lignes',' · libera unas {n} líneas',' · schafft etwa {n} Zeilen',' · libera circa {n} righe',' · liberta cerca de {n} linhas',' · oslobađa oko {n} redaka',' · освобождает примерно {n} строк',' · 約 {n} 行ぶんの余地',' · लगभग {n} पंक्तियाँ मुक्त करता है'],
+'מה זה עלה:':['ما كلفة ذلك:','What it cost:','Ce que cela a coûté :','Lo que costó:','Was es gekostet hat:','Quanto è costato:','O que custou:','Što je to stajalo:','Во что это обошлось:','その代償:','इसकी कीमत:'],
+'הוסרו {n} פריטים.':['حُذف {n} عنصراً.','{n} items were removed.','{n} éléments ont été retirés.','Se quitaron {n} elementos.','{n} Einträge wurden entfernt.','Sono stati rimossi {n} elementi.','Foram removidos {n} itens.','Uklonjeno je {n} stavki.','Удалено элементов: {n}.','{n} 件を削除しました。','{n} मदें हटाई गईं।'],
+'כיסוי מילות המפתח של המשרה לא השתנה ({k}%).':['تغطية الكلمات المفتاحية للوظيفة لم تتغيّر ({k}%).','Coverage of the posting\'s keywords did not change ({k}%).','La couverture des mots-clés de l\'annonce n\'a pas changé ({k}%).','La cobertura de las palabras clave de la oferta no cambió ({k}%).','Die Abdeckung der Stichwörter der Stelle blieb unverändert ({k}%).','La copertura delle parole chiave dell\'annuncio non è cambiata ({k}%).','A cobertura das palavras-chave da vaga não mudou ({k}%).','Pokrivenost ključnih riječi oglasa nije se promijenila ({k}%).','Покрытие ключевых слов вакансии не изменилось ({k}%).','求人のキーワード網羅率は変わりませんでした（{k}%）。','पद के मुख्य शब्दों का कवरेज नहीं बदला ({k}%)।'],
+'כיסוי מילות המפתח השתנה ב־{d} נקודות, ל־{k}%.':['تغيّرت تغطية الكلمات المفتاحية بمقدار {d} نقاط، إلى {k}%.','Keyword coverage changed by {d} points, to {k}%.','La couverture des mots-clés a changé de {d} points, à {k}%.','La cobertura de palabras clave cambió {d} puntos, a {k}%.','Die Stichwortabdeckung änderte sich um {d} Punkte, auf {k}%.','La copertura delle parole chiave è cambiata di {d} punti, a {k}%.','A cobertura de palavras-chave mudou {d} pontos, para {k}%.','Pokrivenost ključnih riječi promijenila se za {d} bodova, na {k}%.','Покрытие ключевых слов изменилось на {d} пунктов, до {k}%.','キーワード網羅率が {d} ポイント変化し、{k}% になりました。','मुख्य शब्दों का कवरेज {d} अंक बदलकर {k}% हुआ।'],
+'אף דרישה לא איבדה את השורה שהוכיחה אותה.':['لم يفقد أي متطلب السطر الذي يثبته.','No requirement lost the line that proved it.','Aucune exigence n\'a perdu la ligne qui la prouvait.','Ningún requisito perdió la línea que lo demostraba.','Keine Anforderung hat die Zeile verloren, die sie belegt hat.','Nessun requisito ha perso la riga che lo dimostrava.','Nenhum requisito perdeu a linha que o provava.','Nijedan zahtjev nije izgubio redak koji ga je dokazivao.','Ни одно требование не потеряло строку, которая его подтверждала.','要件が、それを裏づける行を失うことはありませんでした。','किसी भी आवश्यकता ने उसे सिद्ध करने वाली पंक्ति नहीं खोई।'],
+'{n} דרישות איבדו את השורה שהוכיחה אותן.':['{n} متطلبات فقدت السطر الذي يثبتها.','{n} requirements lost the line that proved them.','{n} exigences ont perdu la ligne qui les prouvait.','{n} requisitos perdieron la línea que los demostraba.','{n} Anforderungen haben die Zeile verloren, die sie belegt hat.','{n} requisiti hanno perso la riga che li dimostrava.','{n} requisitos perderam a linha que os provava.','{n} zahtjeva izgubilo je redak koji ih je dokazivao.','{n} требований потеряли строку, которая их подтверждала.','{n} 件の要件が、それを裏づける行を失いました。','{n} आवश्यकताओं ने उन्हें सिद्ध करने वाली पंक्ति खो दी।'],
+'בקש הצעות נוספות':['اطلب مقترحات إضافية','Ask for more proposals','Demander d\'autres propositions','Pedir más propuestas','Weitere Vorschläge anfordern','Chiedi altre proposte','Pedir mais propostas','Zatraži još prijedloga','Запросить ещё предложения','さらに提案を求める','और सुझाव माँगें'],
+'המסמך נכנס לעמוד. אם יירדו עוד שורות, הגופן והמרווחים יחזרו לגדול יותר.':['المستند يدخل في صفحة. إذا حُذفت أسطر إضافية، سيعود الخط والمسافات إلى حجم أكبر.','The document fits on a page. Remove more lines and the type and spacing grow back.','Le document tient sur une page. Retirez d\'autres lignes et la police et les espacements reprennent de l\'ampleur.','El documento cabe en una página. Si quitas más líneas, la letra y los espacios vuelven a crecer.','Das Dokument passt auf eine Seite. Werden weitere Zeilen entfernt, werden Schrift und Abstände wieder größer.','Il documento sta in una pagina. Togliendo altre righe, il carattere e gli spazi tornano più grandi.','O documento cabe numa página. Se remover mais linhas, a letra e os espaços voltam a crescer.','Dokument stane na stranicu. Uklonite li još redaka, slova i razmaci ponovno će se povećati.','Документ помещается на страницу. Если убрать ещё строки, шрифт и отступы снова станут больше.','この文書は 1 ページに収まります。さらに行を減らせば、文字と余白は大きく戻ります。','दस्तावेज़ एक पृष्ठ में आ जाता है। और पंक्तियाँ हटाएँ तो फ़ॉन्ट और जगह फिर बड़े हो जाएँगे।'],
 'הצילום נסרק.':['تم مسح الصورة.','The screenshot was read.','La capture a été analysée.','La captura se leyó.','Der Screenshot wurde gelesen.','Lo screenshot è stato letto.','A captura foi lida.','Snimka je pročitana.','Снимок распознан.','スクリーンショットを読み取りました。','स्क्रीनशॉट पढ़ लिया गया।'],
 'הקובץ נטען.':['تم تحميل الملف.','The file was loaded.','Le fichier est chargé.','El archivo se cargó.','Die Datei wurde geladen.','Il file è stato caricato.','O arquivo foi carregado.','Datoteka je učitana.','Файл загружен.','ファイルを読み込みました。','फ़ाइल लोड हो गई।'],
 'הקטנה נוספת תפגע בקריאוּת, ולכן היא נעצרת כאן. כדי לרדת לשני עמודים צריך להסיר תוכן: חזור לשלב 5 ואשר את הסעיפים או התפקידים שסומנו כלא רלוונטיים למשרה.':['أي تصغير إضافي سيضرّ بالمقروئية، ولذلك يتوقف هنا. للنزول إلى صفحتين يجب إزالة محتوى: عد إلى المرحلة 5 ووافق على البنود أو الوظائف التي وُسمت كغير ذات صلة بالوظيفة.','Shrinking further would hurt readability, so it stops here. To get down to two pages content has to go: return to stage 5 and approve the points or roles that were marked as irrelevant to the posting.','Réduire davantage nuirait à la lisibilité, cela s\'arrête donc ici. Pour descendre à deux pages, il faut retirer du contenu : revenez à l\'étape 5 et validez les éléments ou postes marqués comme hors sujet.','Reducir más dañaría la legibilidad, así que se detiene aquí. Para bajar a dos páginas hay que quitar contenido: vuelve a la etapa 5 y aprueba los puntos o puestos marcados como irrelevantes para la oferta.','Weiteres Verkleinern würde die Lesbarkeit beeinträchtigen, daher endet es hier. Um auf zwei Seiten zu kommen, muss Inhalt weichen: Kehren Sie zu Schritt 5 zurück und geben Sie die als irrelevant markierten Punkte oder Stationen frei.','Ridurre ancora comprometterebbe la leggibilità, quindi ci si ferma qui. Per scendere a due pagine bisogna togliere contenuto: torna alla fase 5 e approva i punti o gli incarichi segnati come non pertinenti.','Reduzir mais prejudicaria a legibilidade, então para por aqui. Para chegar a duas páginas é preciso tirar conteúdo: volte à etapa 5 e aprove os itens ou cargos marcados como irrelevantes para a vaga.','Daljnje smanjivanje narušilo bi čitljivost, pa ovdje staje. Da se spusti na dvije stranice, sadržaj mora otići: vratite se na korak 5 i odobrite stavke ili radna mjesta označena kao nevažna za oglas.','Дальнейшее уменьшение повредит читаемости, поэтому оно останавливается здесь. Чтобы уложиться в две страницы, надо убрать содержание: вернитесь на этап 5 и утвердите пункты или должности, помеченные как нерелевантные.','これ以上の縮小は読みやすさを損なうため、ここで止まります。2 ページに収めるには内容を減らす必要があります。ステップ 5 に戻り、求人に無関係と印の付いた項目や職歴を承認してください。','और घटाने से पठनीयता बिगड़ेगी, इसलिए यह यहीं रुकता है। दो पृष्ठों तक आने के लिए सामग्री हटानी होगी: चरण 5 पर लौटें और विज्ञापन के लिए अप्रासंगिक चिह्नित बिंदु या पद स्वीकृत करें।'],
