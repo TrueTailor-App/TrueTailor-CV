@@ -1,0 +1,19 @@
+# Local development tools. They run on this machine and have no business
+# being published: the repository root IS the website, so anything committed
+# here is downloadable by anyone, and tt_check.js carries sample CVs.
+publish.js
+tt_check.js
+Update_site.bat
+
+# Archived versions. index.html is the published copy; keeping every
+# numbered version in the repo means the website serves all of them.
+TrueTailor_CV_v*.html
+
+# Internal notes
+TrueTailor_CV_Project_Dossier.md
+TrueTailor_CV_Project_Instructions.md
+
+# Junk
+*.zip
+Thumbs.db
+desktop.ini
