@@ -12,13 +12,20 @@ if (!inputFile || !fs.existsSync(inputFile)) {
 let htmlContent = fs.readFileSync(inputFile, 'utf8');
 
 // 1. הגדרת תגית CSP
+// v39.46.0: added the Supabase sign-in gate. script-src gained
+// cdn.jsdelivr.net (that is where the supabase-js tag loads from - not
+// mirrored on cdnjs, the CDN already used above). connect-src gained
+// https://*.supabase.co (every call the SDK makes after it loads: auth,
+// getSession, the increment_usage rpc). No other directive needed one -
+// the Google OAuth hop is a full top-level page redirect, not a fetch/XHR,
+// so it is not something connect-src/script-src governs.
 const cspMetaTag = `
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://www.google-analytics.com https://analytics.google.com https://*.amazonaws.com;
+  connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://www.google-analytics.com https://analytics.google.com https://*.amazonaws.com https://*.supabase.co;
   worker-src 'self' blob: https://cdnjs.cloudflare.com;
   img-src 'self' data: blob: https://www.google-analytics.com https://*.google-analytics.com;
   frame-ancestors 'none';
