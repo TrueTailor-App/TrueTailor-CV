@@ -17,3 +17,4 @@ TrueTailor_CV_Project_Instructions.md
 *.zip
 Thumbs.db
 desktop.ini
+.env.local
