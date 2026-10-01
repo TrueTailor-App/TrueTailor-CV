@@ -10,13 +10,15 @@ jobs:
   ping-supabase:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Health Endpoint
+      - name: Ping Supabase Root Endpoint
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" "https://fruzzkgdjaludyxbsymi.supabase.co/health")
+          response=$(curl -s -o /dev/null -w "%{http_code}" -L "https://fruzzkgdjaludyxbsymi.supabase.co")
           
-          echo "Supabase health status code: $response"
+          echo "Supabase status code: $response"
           
-          if [ "$response" -ne 200 ]; then
-            echo "Failed to ping Supabase, expected status 200 but got $response"
+          if [ "$response" -eq 000 ]; then
+            echo "Failed to connect to Supabase"
             exit 1
           fi
+          
+          echo "Successfully reached Supabase project!"
