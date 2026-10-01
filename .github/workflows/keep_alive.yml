@@ -10,14 +10,11 @@ jobs:
   ping-supabase:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase REST API
+      - name: Ping Supabase Health Endpoint
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET "https://fruzzkgdjaludyxbsymi.supabase.co/rest/v1/?select=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          response=$(curl -s -o /dev/null -w "%{http_code}" "https://fruzzkgdjaludyxbsymi.supabase.co/health")
           
-          echo "Supabase response status code: $response"
+          echo "Supabase health status code: $response"
           
           if [ "$response" -ne 200 ]; then
             echo "Failed to ping Supabase, expected status 200 but got $response"
