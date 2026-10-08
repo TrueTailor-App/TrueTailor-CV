@@ -7,13 +7,69 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#F9F9F9",
-  "theme_color": "#3C4A3E",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B1B31",
   "dir": "auto",
   "lang": "en",
+  "categories": [
+    "productivity",
+    "business"
+  ],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/mobile-1-input.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Paste your resume and the job posting"
+    },
+    {
+      "src": "screenshots/mobile-2-analysis.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "See what your resume proves and what it does not"
+    },
+    {
+      "src": "screenshots/mobile-3-questions.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Answer a few focused questions about the gaps"
+    },
+    {
+      "src": "screenshots/wide-1-input.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Paste your resume and the job posting"
+    },
+    {
+      "src": "screenshots/wide-2-analysis.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Fit analysis requirement by requirement"
+    }
   ]
 }
