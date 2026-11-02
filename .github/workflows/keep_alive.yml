@@ -2,23 +2,39 @@ name: Keep Supabase Project Alive
 
 on:
   schedule:
-    # מריץ את הפעולה מדי 3 ימים בשעה 12:30 UTC
-    - cron: '30 12 */3 * *'
-  workflow_dispatch: # מאפשר הרצה ידנית בלחיצת כפתור
+    # Three real database reads a day. Supabase judges database activity, typically
+    # a few requests a day, so one request every 3 days is not enough.
+    - cron: '23 3,11,19 * * *'
+  workflow_dispatch:
 
 jobs:
   ping-supabase:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: https://fruzzkgdjaludyxbsymi.supabase.co
+      # The public anon key, the same one the site ships to every browser.
+      # Row Level Security is what protects the data, not this key.
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZydXp6a2dkamFsdWR5eGJzeW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1OTU3MDEsImV4cCI6MjEwMzE3MTcwMX0.VRaypsGsdY7XBiS-4jyrnCfgclf5X3dU4GeFtXvB95s
     steps:
-      - name: Ping Supabase Root Endpoint
+      - name: Read one row from the database
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -L "https://fruzzkgdjaludyxbsymi.supabase.co")
-          
-          echo "Supabase status code: $response"
-          
-          if [ "$response" -eq 000 ]; then
-            echo "Failed to connect to Supabase"
+          body_file=$(mktemp)
+          code=$(curl -sS -m 30 --retry 3 --retry-delay 20 --retry-connrefused \
+            -o "$body_file" -w '%{http_code}' \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/user_profiles?select=id&limit=1") || code=000
+
+          echo "Supabase REST status: $code"
+
+          # Only 200 proves the request reached the database. A 404 from the
+          # gateway does not. A 200 body is never printed: these logs are public.
+          if [ "$code" != "200" ]; then
+            echo "Database read failed. Response:"
+            head -c 500 "$body_file"
+            echo
             exit 1
           fi
-          
-          echo "Successfully reached Supabase project!"
+
+          echo "Database read succeeded."
